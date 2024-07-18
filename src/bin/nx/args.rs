@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::net::{IpAddr,Ipv4Addr,Ipv6Addr};
 use pest_derive::Parser;
 use pest::error::Error;
 use pest::Parser;
@@ -8,24 +9,18 @@ use pest::iterators::Pair;
 #[grammar = "bin/nx/args.pest"]
 pub struct ARGParser;
 
-type IPv4Addr = u32;
-type IPv4Mask = u32;
-type IPv6Addr = u128;
-type IPv6Mask = u128;
-
 #[derive(PartialEq,Debug)]
 pub enum PortOption {
     Specific(u16),
     List(Vec<u16>),
     Range(u16, u16),
-    Any,
 }
 
 #[derive(PartialEq,Debug)]
 pub enum Address {
     MAC(u64), // 48 bit, really
-    IPv4(IPv4Addr, IPv4Mask, PortOption),
-    IPv6(IPv6Addr, IPv6Mask, PortOption),
+    IPv4(Ipv4Addr, Ipv4Addr, PortOption),
+    IPv6(Ipv6Addr, Ipv6Addr, PortOption),
     PortOnly(PortOption),
 }
 
