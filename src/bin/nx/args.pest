@@ -22,7 +22,7 @@ ipv6_ip = @{ "[" ~ ipv6_address_byte{1,8} ~ "]" }
 ipv6_address = @{ ipv6_ip ~ mask? ~ port_opt? }
 mac_address = @{ (ASCII_HEX_DIGIT{2} ~ ":"){5} ~ ASCII_HEX_DIGIT{2} }
 interface = @{ (ASCII_ALPHANUMERIC | "-")+ }
-option = { SOI ~ (pcap
+argument = { SOI ~ (pcap
   | protocol_opt
   | address
   | anchor_address
