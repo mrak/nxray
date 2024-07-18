@@ -85,7 +85,7 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
         arg.as_str().parse::<u16>().unwrap()
     }
 
-    fn parse_address(arg: Pair<Rule>) -> Argument {
+    fn parse_address(direction: PacketDirection, arg: Pair<Rule>) -> Argument {
         let a = arg.into_inner().next().unwrap();
         match a.as_rule() {
             Rule::port_opt => {
@@ -101,9 +101,9 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
                         let upper = parse_port(inner.next().unwrap());
                         PortOption::Range(lower, upper)
                     },
-                    _ => todo!()
+                    _ => unreachable!()
                 };
-                Argument::AddressFilter(PacketDirection::Either, Address::PortOnly(port_opt))
+                Argument::AddressFilter(direction, Address::PortOnly(port_opt))
             },
             Rule::ipv4_address => todo!(),
             Rule::ipv6_address => todo!(),
@@ -121,7 +121,18 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
     return Ok(match arg.as_rule() {
         Rule::pcap => Argument::Pcap,
         Rule::protocol_opt => parse_protocol_opt(arg),
-        Rule::address => parse_address(arg),
+        Rule::address => parse_address(PacketDirection::Either, arg),
+        Rule::anchor_address => {
+            let mut inner = arg.into_inner();
+            let dir_arg = inner.next().unwrap();
+            let addr_arg = inner.next().unwrap();
+            let direction = match dir_arg.into_inner().next().unwrap().as_rule() {
+                Rule::source => PacketDirection::Source,
+                Rule::destination => PacketDirection::Destination,
+                _ => unreachable!()
+            };
+            parse_address(direction, addr_arg)
+        },
         Rule::interface => Argument::Interface(arg.as_str()),
         _ => todo!(),
     })
@@ -163,6 +174,10 @@ mod tests {
 
     #[test]
     fn port() {
+        let result = parse_arg("^:8080");
+        assert_eq!(result.unwrap(), Argument::AddressFilter(PacketDirection::Source, Address::PortOnly(PortOption::Specific(8080))));
+        let result = parse_arg("@:8080");
+        assert_eq!(result.unwrap(), Argument::AddressFilter(PacketDirection::Destination, Address::PortOnly(PortOption::Specific(8080))));
         let result = parse_arg(":8080");
         assert_eq!(result.unwrap(), Argument::AddressFilter(PacketDirection::Either, Address::PortOnly(PortOption::Specific(8080))));
         let result = parse_arg(":80,443");
@@ -175,6 +190,10 @@ mod tests {
         assert_eq!(result.unwrap(), Argument::AddressFilter(PacketDirection::Either, Address::PortOnly(PortOption::Range(0,2000))));
         let result = parse_arg(":1000-");
         assert_eq!(result.unwrap(), Argument::AddressFilter(PacketDirection::Either, Address::PortOnly(PortOption::Range(1000,u16::MAX))));
+    }
+
+    #[test]
+    fn ipv4() {
     }
 
     #[test]
