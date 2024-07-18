@@ -89,11 +89,18 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
         let a = arg.into_inner().next().unwrap();
         match a.as_rule() {
             Rule::port_opt => {
-                println!("here:{a:?}");
                 let opt = a.into_inner().next().unwrap();
                 let port_opt = match opt.as_rule() {
                     Rule::port => PortOption::Specific(opt.as_str().parse::<u16>().unwrap()),
                     Rule::port_list => PortOption::List(opt.into_inner().map(parse_port).collect()),
+                    Rule::port_range_lower => PortOption::Range(0, opt.into_inner().as_str().parse::<u16>().unwrap()),
+                    Rule::port_range_upper => PortOption::Range(opt.into_inner().as_str().parse::<u16>().unwrap(), u16::MAX),
+                    Rule::port_range_bounded => {
+                        let mut inner = opt.into_inner();
+                        let lower = parse_port(inner.next().unwrap());
+                        let upper = parse_port(inner.next().unwrap());
+                        PortOption::Range(lower, upper)
+                    },
                     _ => todo!()
                 };
                 Argument::AddressFilter(PacketDirection::Either, Address::PortOnly(port_opt))
@@ -162,6 +169,12 @@ mod tests {
         assert_eq!(result.unwrap(), Argument::AddressFilter(PacketDirection::Either, Address::PortOnly(PortOption::List(vec!(80,443)))));
         let result = parse_arg(":80,443,8080,8443");
         assert_eq!(result.unwrap(), Argument::AddressFilter(PacketDirection::Either, Address::PortOnly(PortOption::List(vec!(80,443,8080,8443)))));
+        let result = parse_arg(":1000-2000");
+        assert_eq!(result.unwrap(), Argument::AddressFilter(PacketDirection::Either, Address::PortOnly(PortOption::Range(1000,2000))));
+        let result = parse_arg(":-2000");
+        assert_eq!(result.unwrap(), Argument::AddressFilter(PacketDirection::Either, Address::PortOnly(PortOption::Range(0,2000))));
+        let result = parse_arg(":1000-");
+        assert_eq!(result.unwrap(), Argument::AddressFilter(PacketDirection::Either, Address::PortOnly(PortOption::Range(1000,u16::MAX))));
     }
 
     #[test]
