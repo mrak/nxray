@@ -1,7 +1,7 @@
 mod args;
 
-use std::env;
 use args::*;
+use std::env;
 
 fn main() {
     for argument in env::args().skip(1) {

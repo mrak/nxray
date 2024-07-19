@@ -11,3 +11,4 @@ name = "nx"
 [dependencies]
 pest = "2.7"
 pest_derive = "2.7"
+pnet = "0.35"
