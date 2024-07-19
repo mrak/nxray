@@ -9,7 +9,7 @@ direction = ${ source | destination }
 address = ${ port_opt | mac_address | ipv4_address | ipv6_address }
 anchor_address = ${ direction ~ address }
 packet_between = ${ address ~ "=" ~ address }
-packet_anchored = @{ anchor_address ~ anchor_address }
+packet_anchored = ${ anchor_address ~ anchor_address }
 port = @{ ASCII_DIGIT{1,5} }
 port_range_lower = ${ "-" ~ port }
 port_range_upper = ${ port ~ "-" }
@@ -30,8 +30,8 @@ interface = @{ (ASCII_ALPHANUMERIC | "-")+ }
 argument = { SOI ~ (pcap
   | protocol_opt
   | packet_between
+  | packet_anchored
   | address
   | anchor_address
-  | packet_anchored
   | interface
   ) ~ EOI }

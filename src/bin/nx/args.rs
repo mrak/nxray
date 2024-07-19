@@ -178,6 +178,17 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
         }
     }
 
+    fn parse_anchor_address(arg: Pair<Rule>) -> (PacketDirection, Address) {
+        let mut inner = arg.into_inner();
+        let direction = match inner.next().unwrap().into_inner().next().unwrap().as_rule() {
+            Rule::source => PacketDirection::Source,
+            Rule::destination => PacketDirection::Destination,
+            _ => unreachable!(),
+        };
+        let address = parse_address(inner.next().unwrap());
+        (direction, address)
+    }
+
     let arg = ARGParser::parse(Rule::argument, argstr)?
         .next()
         .unwrap()
@@ -190,17 +201,15 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
         Rule::protocol_opt => parse_protocol_opt(arg),
         Rule::address => Argument::AddressFilter(PacketDirection::Either, parse_address(arg)),
         Rule::anchor_address => {
-            let mut inner = arg.into_inner();
-            let dir_arg = inner.next().unwrap();
-            let addr_arg = inner.next().unwrap();
-            let direction = match dir_arg.into_inner().next().unwrap().as_rule() {
-                Rule::source => PacketDirection::Source,
-                Rule::destination => PacketDirection::Destination,
-                _ => unreachable!(),
-            };
-            Argument::AddressFilter(direction, parse_address(addr_arg))
+            let (direction, address) = parse_anchor_address(arg);
+            Argument::AddressFilter(direction, address)
         }
-        Rule::packet_anchored => todo!(),
+        Rule::packet_anchored => {
+            let mut inner = arg.into_inner();
+            let (one_dir, one_addr) = parse_anchor_address(inner.next().unwrap());
+            let (two_dir, two_addr) = parse_anchor_address(inner.next().unwrap());
+            Argument::PacketFilter(one_dir, one_addr, two_dir, two_addr)
+        }
         Rule::packet_between => {
             let mut inner = arg.into_inner();
             let first = inner.next().unwrap();
@@ -503,6 +512,24 @@ mod tests {
                     PortOption::Specific(53),
                 ),
                 PacketDirection::Either,
+                Address::IP(
+                    IpAddr::V4(Ipv4Addr::new(192, 168, 100, 0)),
+                    IpAddr::V4(Ipv4Addr::new(255, 255, 255, 0)),
+                    PortOption::Range(1, u16::MAX),
+                ),
+            )
+        );
+        let result = parse_arg("^192.168.1.1/24:53@192.168.100.100/24");
+        assert_eq!(
+            result.unwrap(),
+            Argument::PacketFilter(
+                PacketDirection::Source,
+                Address::IP(
+                    IpAddr::V4(Ipv4Addr::new(192, 168, 1, 0)),
+                    IpAddr::V4(Ipv4Addr::new(255, 255, 255, 0)),
+                    PortOption::Specific(53),
+                ),
+                PacketDirection::Destination,
                 Address::IP(
                     IpAddr::V4(Ipv4Addr::new(192, 168, 100, 0)),
                     IpAddr::V4(Ipv4Addr::new(255, 255, 255, 0)),
