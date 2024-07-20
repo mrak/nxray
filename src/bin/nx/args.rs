@@ -4,7 +4,7 @@ use pest::iterators::Pair;
 use pest::Parser;
 use pest_derive::Parser;
 use pnet::datalink::MacAddr;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use pnet::ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use std::str::FromStr;
 
 #[derive(Parser)]
@@ -21,7 +21,7 @@ pub enum PortOption {
 #[derive(PartialEq, Debug)]
 pub enum Address {
     MAC(MacAddr),
-    IP(IpAddr, IpAddr, PortOption),
+    IP(IpNetwork, PortOption),
     PortOnly(PortOption),
 }
 
@@ -104,68 +104,11 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
         })
     }
 
-    fn parse_ip6_mask(arg: Pair<Rule>) -> Result<Ipv6Addr, Error<Rule>> {
-        let mut bitmask: u128 = u128::MAX;
-        let mask_int = arg
-            .as_str()
-            .strip_prefix("/")
-            .unwrap()
-            .parse::<usize>()
-            .or_else(|e| {
-                Err(Error::new_from_span(
-                    ErrorVariant::<Rule>::CustomError {
-                        message: e.to_string(),
-                    },
-                    arg.as_span(),
-                ))
-            })?;
-        if mask_int > 128 {
-            return Err(Error::new_from_span(
-                ErrorVariant::<Rule>::CustomError {
-                    message: format!("CIDR must between 0 and 128"),
-                },
-                arg.as_span(),
-            ));
-        }
-        let count = 128 - mask_int;
-        bitmask = bitmask << count;
-        Ok(Ipv6Addr::from(bitmask))
-    }
-
-    fn parse_ip4_mask(arg: Pair<Rule>) -> Result<Ipv4Addr, Error<Rule>> {
-        let mut bitmask: u32 = u32::MAX;
-        let mask_int = arg
-            .as_str()
-            .strip_prefix("/")
-            .unwrap()
-            .parse::<usize>()
-            .or_else(|e| {
-                Err(Error::new_from_span(
-                    ErrorVariant::<Rule>::CustomError {
-                        message: e.to_string(),
-                    },
-                    arg.as_span(),
-                ))
-            })?;
-        if mask_int > 32 {
-            return Err(Error::new_from_span(
-                ErrorVariant::<Rule>::CustomError {
-                    message: format!("CIDR mask must between 0 and 32"),
-                },
-                arg.as_span(),
-            ));
-        }
-        let count = 32 - mask_int;
-        bitmask = bitmask << count;
-        Ok(Ipv4Addr::from(bitmask))
-    }
-
     fn parse_ip4_address(arg: Pair<Rule>) -> Result<Address, Error<Rule>> {
         let mut inner = arg.clone().into_inner();
         let mut port_opt = PortOption::Range(1, u16::MAX);
-        let mut mask = Ipv4Addr::from(u32::MAX);
         let ip_str = inner.next().unwrap().as_str();
-        let mut ip = ip_str.parse::<Ipv4Addr>().or_else(|e| {
+        let ip = ip_str.parse::<Ipv4Network>().or_else(|e| {
             Err(Error::new_from_span(
                 ErrorVariant::<Rule>::CustomError {
                     message: e.to_string(),
@@ -173,25 +116,17 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
                 arg.as_span(),
             ))
         })?;
-        while let Some(n) = inner.next() {
-            match n.as_rule() {
-                Rule::mask => {
-                    mask = parse_ip4_mask(n)?;
-                    ip = ip & mask;
-                }
-                Rule::port_opt => port_opt = parse_port_opt(n)?,
-                _ => unreachable!(),
-            }
+        if let Some(n) = inner.next() {
+            port_opt = parse_port_opt(n)?
         }
-        Ok(Address::IP(IpAddr::V4(ip), IpAddr::V4(mask), port_opt))
+        Ok(Address::IP(IpNetwork::V4(ip), port_opt))
     }
 
     fn parse_ip6_address(arg: Pair<Rule>) -> Result<Address, Error<Rule>> {
         let mut inner = arg.clone().into_inner();
         let mut port_opt = PortOption::Range(1, u16::MAX);
-        let mut mask = Ipv6Addr::from(u128::MAX);
         let ip_str = inner.next().unwrap().as_str();
-        let mut ip = ip_str.parse::<Ipv6Addr>().or_else(|e| {
+        let ip = ip_str.parse::<Ipv6Network>().or_else(|e| {
             Err(Error::new_from_span(
                 ErrorVariant::<Rule>::CustomError {
                     message: e.to_string(),
@@ -199,17 +134,10 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
                 arg.as_span(),
             ))
         })?;
-        while let Some(n) = inner.next() {
-            match n.as_rule() {
-                Rule::mask => {
-                    mask = parse_ip6_mask(n)?;
-                    ip = ip & mask;
-                }
-                Rule::port_opt => port_opt = parse_port_opt(n)?,
-                _ => unreachable!(),
-            }
+        if let Some(n) = inner.next() {
+            port_opt = parse_port_opt(n)?
         }
-        Ok(Address::IP(IpAddr::V6(ip), IpAddr::V6(mask), port_opt))
+        Ok(Address::IP(IpNetwork::V6(ip), port_opt))
     }
 
     fn parse_address(arg: Pair<Rule>) -> Result<Address, Error<Rule>> {
@@ -372,8 +300,7 @@ mod tests {
             Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
-                    IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)),
-                    IpAddr::V4(Ipv4Addr::new(255, 255, 255, 255)),
+                    IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 1, 1), 32).unwrap()),
                     PortOption::Range(1, u16::MAX),
                 )
             ))
@@ -384,8 +311,7 @@ mod tests {
             Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
-                    IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)),
-                    IpAddr::V4(Ipv4Addr::new(255, 255, 255, 255)),
+                    IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 1, 1), 32).unwrap()),
                     PortOption::Specific(8080),
                 )
             ))
@@ -396,8 +322,7 @@ mod tests {
             Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
-                    IpAddr::V4(Ipv4Addr::new(192, 168, 1, 0)),
-                    IpAddr::V4(Ipv4Addr::new(255, 255, 255, 0)),
+                    IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 1, 1), 24).unwrap()),
                     PortOption::Specific(8080),
                 )
             ))
@@ -408,8 +333,7 @@ mod tests {
             Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
-                    IpAddr::V4(Ipv4Addr::new(192, 168, 1, 0)),
-                    IpAddr::V4(Ipv4Addr::new(255, 255, 255, 0)),
+                    IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 1, 1), 24).unwrap()),
                     PortOption::Range(1, u16::MAX),
                 )
             ))
@@ -424,8 +348,13 @@ mod tests {
             Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
-                    IpAddr::V6(Ipv6Addr::from(0xfe800000000000000000000000000000_u128)),
-                    IpAddr::V6(Ipv6Addr::from(0xffc00000000000000000000000000000_u128)),
+                    IpNetwork::V6(
+                        Ipv6Network::new(
+                            Ipv6Addr::from(0xfe800000000000000000000000000000_u128),
+                            10
+                        )
+                        .unwrap()
+                    ),
                     PortOption::Range(1, u16::MAX),
                 )
             ))
@@ -436,8 +365,13 @@ mod tests {
             Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
-                    IpAddr::V6(Ipv6Addr::from(0xfe800000000000000000000000000000_u128)),
-                    IpAddr::V6(Ipv6Addr::from(0xffc00000000000000000000000000000_u128)),
+                    IpNetwork::V6(
+                        Ipv6Network::new(
+                            Ipv6Addr::from(0xfe800000000000000000000000000000_u128),
+                            10
+                        )
+                        .unwrap()
+                    ),
                     PortOption::Range(1, u16::MAX),
                 )
             ))
@@ -448,8 +382,13 @@ mod tests {
             Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
-                    IpAddr::V6(Ipv6Addr::from(0xfe800000000000000000000000000000_u128)),
-                    IpAddr::V6(Ipv6Addr::from(u128::MAX)),
+                    IpNetwork::V6(
+                        Ipv6Network::new(
+                            Ipv6Addr::from(0xfe800000000000000000000000000000_u128),
+                            128
+                        )
+                        .unwrap()
+                    ),
                     PortOption::Specific(944),
                 )
             ))
@@ -460,8 +399,13 @@ mod tests {
             Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
-                    IpAddr::V6(Ipv6Addr::from(0xfe800000000000000000000000000000_u128)),
-                    IpAddr::V6(Ipv6Addr::from(0xffffffffffffffff0000000000000000_u128)),
+                    IpNetwork::V6(
+                        Ipv6Network::new(
+                            Ipv6Addr::from(0xfe800000000000000000000000000000_u128),
+                            64
+                        )
+                        .unwrap()
+                    ),
                     PortOption::Specific(944),
                 )
             ))
@@ -504,14 +448,12 @@ mod tests {
             Argument::FilterExpr(Filter::PacketFilter(
                 PacketDirection::Either,
                 Address::IP(
-                    IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)),
-                    IpAddr::V4(Ipv4Addr::new(255, 255, 255, 255)),
+                    IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 1, 1), 32).unwrap()),
                     PortOption::Range(1, u16::MAX),
                 ),
                 PacketDirection::Either,
                 Address::IP(
-                    IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100)),
-                    IpAddr::V4(Ipv4Addr::new(255, 255, 255, 255)),
+                    IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 1, 100), 32).unwrap()),
                     PortOption::Range(1, u16::MAX),
                 ),
             ))
@@ -522,14 +464,12 @@ mod tests {
             Argument::FilterExpr(Filter::PacketFilter(
                 PacketDirection::Either,
                 Address::IP(
-                    IpAddr::V4(Ipv4Addr::new(192, 168, 1, 0)),
-                    IpAddr::V4(Ipv4Addr::new(255, 255, 255, 0)),
+                    IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 1, 1), 24).unwrap()),
                     PortOption::Specific(53),
                 ),
                 PacketDirection::Either,
                 Address::IP(
-                    IpAddr::V4(Ipv4Addr::new(192, 168, 100, 0)),
-                    IpAddr::V4(Ipv4Addr::new(255, 255, 255, 0)),
+                    IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 100, 100), 24).unwrap()),
                     PortOption::Range(1, u16::MAX),
                 ),
             ))
@@ -540,14 +480,12 @@ mod tests {
             Argument::FilterExpr(Filter::PacketFilter(
                 PacketDirection::Source,
                 Address::IP(
-                    IpAddr::V4(Ipv4Addr::new(192, 168, 1, 0)),
-                    IpAddr::V4(Ipv4Addr::new(255, 255, 255, 0)),
+                    IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 1, 1), 24).unwrap()),
                     PortOption::Specific(53),
                 ),
                 PacketDirection::Destination,
                 Address::IP(
-                    IpAddr::V4(Ipv4Addr::new(192, 168, 100, 0)),
-                    IpAddr::V4(Ipv4Addr::new(255, 255, 255, 0)),
+                    IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 100, 100), 24).unwrap()),
                     PortOption::Range(1, u16::MAX),
                 ),
             ))
