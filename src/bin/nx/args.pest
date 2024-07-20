@@ -1,8 +1,5 @@
-on = { "+" }
-off = { "-" }
 protocol = { "tcp" | "udp" | "icmp" | "ethernet" }
 pcap = { "pcap" }
-protocol_opt = ${ (on | off)? ~ protocol }
 destination = @{ "@" }
 source = @{ "^" }
 direction = ${ source | destination }
@@ -28,7 +25,7 @@ ipv6_address = ${ ipv6_with_port | ipv6_no_port }
 mac_address = @{ (ASCII_HEX_DIGIT{2} ~ ":"){5} ~ ASCII_HEX_DIGIT{2} }
 interface = @{ (ASCII_ALPHANUMERIC | "-")+ }
 argument = { SOI ~ (pcap
-  | protocol_opt
+  | protocol
   | packet_between
   | packet_anchored
   | address

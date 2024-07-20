@@ -53,28 +53,20 @@ impl FromStr for Protocol {
 }
 
 #[derive(PartialEq, Debug)]
-pub enum Argument<'a> {
-    Pcap,
-    Interface(&'a str),
-    ProtocolOpt(Protocol, Option<bool>),
+pub enum Filter {
     AddressFilter(PacketDirection, Address),
     PacketFilter(PacketDirection, Address, PacketDirection, Address),
 }
 
-pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
-    fn parse_protocol_opt(arg: Pair<Rule>) -> Argument {
-        let option = match arg.as_str().chars().nth(0) {
-            Some('-') => Some(false),
-            Some('+') => Some(true),
-            _ => None,
-        };
-        let protocol = match option {
-            Some(_) => Protocol::from_str(arg.as_str().get(1..).unwrap()).unwrap(),
-            None => Protocol::from_str(arg.as_str()).unwrap(),
-        };
-        Argument::ProtocolOpt(protocol, option)
-    }
+#[derive(PartialEq, Debug)]
+pub enum Argument<'a> {
+    Pcap,
+    Interface(&'a str),
+    ProtocolFlag(Protocol),
+    FilterExpr(Filter),
+}
 
+pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
     fn parse_port(arg: Pair<Rule>) -> u16 {
         arg.as_str().parse::<u16>().unwrap()
     }
@@ -198,28 +190,31 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
 
     return Ok(match arg.as_rule() {
         Rule::pcap => Argument::Pcap,
-        Rule::protocol_opt => parse_protocol_opt(arg),
-        Rule::address => Argument::AddressFilter(PacketDirection::Either, parse_address(arg)),
+        Rule::protocol => Argument::ProtocolFlag(Protocol::from_str(arg.as_str()).unwrap()),
+        Rule::address => Argument::FilterExpr(Filter::AddressFilter(
+            PacketDirection::Either,
+            parse_address(arg),
+        )),
         Rule::anchor_address => {
             let (direction, address) = parse_anchor_address(arg);
-            Argument::AddressFilter(direction, address)
+            Argument::FilterExpr(Filter::AddressFilter(direction, address))
         }
         Rule::packet_anchored => {
             let mut inner = arg.into_inner();
             let (one_dir, one_addr) = parse_anchor_address(inner.next().unwrap());
             let (two_dir, two_addr) = parse_anchor_address(inner.next().unwrap());
-            Argument::PacketFilter(one_dir, one_addr, two_dir, two_addr)
+            Argument::FilterExpr(Filter::PacketFilter(one_dir, one_addr, two_dir, two_addr))
         }
         Rule::packet_between => {
             let mut inner = arg.into_inner();
             let first = inner.next().unwrap();
             let second = inner.next().unwrap();
-            Argument::PacketFilter(
+            Argument::FilterExpr(Filter::PacketFilter(
                 PacketDirection::Either,
                 parse_address(first),
                 PacketDirection::Either,
                 parse_address(second),
-            )
+            ))
         }
         Rule::interface => Argument::Interface(arg.as_str()),
         _ => unreachable!(),
@@ -239,46 +234,13 @@ mod tests {
     #[test]
     fn protocol() {
         let result = parse_arg("tcp");
-        assert_eq!(result.unwrap(), Argument::ProtocolOpt(Protocol::TCP, None));
-        let result = parse_arg("-tcp");
-        assert_eq!(
-            result.unwrap(),
-            Argument::ProtocolOpt(Protocol::TCP, Some(false))
-        );
-        let result = parse_arg("+tcp");
-        assert_eq!(
-            result.unwrap(),
-            Argument::ProtocolOpt(Protocol::TCP, Some(true))
-        );
+        assert_eq!(result.unwrap(), Argument::ProtocolFlag(Protocol::TCP));
         let result = parse_arg("udp");
-        assert_eq!(result.unwrap(), Argument::ProtocolOpt(Protocol::UDP, None));
-        let result = parse_arg("-udp");
-        assert_eq!(
-            result.unwrap(),
-            Argument::ProtocolOpt(Protocol::UDP, Some(false))
-        );
-        let result = parse_arg("+udp");
-        assert_eq!(
-            result.unwrap(),
-            Argument::ProtocolOpt(Protocol::UDP, Some(true))
-        );
+        assert_eq!(result.unwrap(), Argument::ProtocolFlag(Protocol::UDP));
         let result = parse_arg("icmp");
-        assert_eq!(result.unwrap(), Argument::ProtocolOpt(Protocol::ICMP, None));
-        let result = parse_arg("-icmp");
-        assert_eq!(
-            result.unwrap(),
-            Argument::ProtocolOpt(Protocol::ICMP, Some(false))
-        );
-        let result = parse_arg("+icmp");
-        assert_eq!(
-            result.unwrap(),
-            Argument::ProtocolOpt(Protocol::ICMP, Some(true))
-        );
+        assert_eq!(result.unwrap(), Argument::ProtocolFlag(Protocol::ICMP));
         let result = parse_arg("ethernet");
-        assert_eq!(
-            result.unwrap(),
-            Argument::ProtocolOpt(Protocol::Ethernet, None)
-        );
+        assert_eq!(result.unwrap(), Argument::ProtocolFlag(Protocol::Ethernet));
     }
 
     #[test]
@@ -286,66 +248,66 @@ mod tests {
         let result = parse_arg("^:8080");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Source,
                 Address::PortOnly(PortOption::Specific(8080))
-            )
+            ))
         );
         let result = parse_arg("@:8080");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Destination,
                 Address::PortOnly(PortOption::Specific(8080))
-            )
+            ))
         );
         let result = parse_arg(":8080");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::PortOnly(PortOption::Specific(8080))
-            )
+            ))
         );
         let result = parse_arg(":80,443");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::PortOnly(PortOption::List(vec!(80, 443)))
-            )
+            ))
         );
         let result = parse_arg(":80,443,8080,8443");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::PortOnly(PortOption::List(vec!(80, 443, 8080, 8443)))
-            )
+            ))
         );
         let result = parse_arg(":1000-2000");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::PortOnly(PortOption::Range(1000, 2000))
-            )
+            ))
         );
         let result = parse_arg(":-2000");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::PortOnly(PortOption::Range(0, 2000))
-            )
+            ))
         );
         let result = parse_arg(":1000-");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::PortOnly(PortOption::Range(1000, u16::MAX))
-            )
+            ))
         );
     }
 
@@ -354,50 +316,50 @@ mod tests {
         let result = parse_arg("192.168.1.1");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
                     IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)),
                     IpAddr::V4(Ipv4Addr::new(255, 255, 255, 255)),
                     PortOption::Range(1, u16::MAX),
                 )
-            )
+            ))
         );
         let result = parse_arg("192.168.1.1:8080");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
                     IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)),
                     IpAddr::V4(Ipv4Addr::new(255, 255, 255, 255)),
                     PortOption::Specific(8080),
                 )
-            )
+            ))
         );
         let result = parse_arg("192.168.1.1/24:8080");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
                     IpAddr::V4(Ipv4Addr::new(192, 168, 1, 0)),
                     IpAddr::V4(Ipv4Addr::new(255, 255, 255, 0)),
                     PortOption::Specific(8080),
                 )
-            )
+            ))
         );
         let result = parse_arg("192.168.1.1/24");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
                     IpAddr::V4(Ipv4Addr::new(192, 168, 1, 0)),
                     IpAddr::V4(Ipv4Addr::new(255, 255, 255, 0)),
                     PortOption::Range(1, u16::MAX),
                 )
-            )
+            ))
         );
     }
 
@@ -406,50 +368,50 @@ mod tests {
         let result = parse_arg("fe80::/10");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
                     IpAddr::V6(Ipv6Addr::from(0xfe800000000000000000000000000000_u128)),
                     IpAddr::V6(Ipv6Addr::from(0xffc00000000000000000000000000000_u128)),
                     PortOption::Range(1, u16::MAX),
                 )
-            )
+            ))
         );
         let result = parse_arg("[fe80::/10]");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
                     IpAddr::V6(Ipv6Addr::from(0xfe800000000000000000000000000000_u128)),
                     IpAddr::V6(Ipv6Addr::from(0xffc00000000000000000000000000000_u128)),
                     PortOption::Range(1, u16::MAX),
                 )
-            )
+            ))
         );
         let result = parse_arg("[fe80::]:944");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
                     IpAddr::V6(Ipv6Addr::from(0xfe800000000000000000000000000000_u128)),
                     IpAddr::V6(Ipv6Addr::from(u128::MAX)),
                     PortOption::Specific(944),
                 )
-            )
+            ))
         );
         let result = parse_arg("[fe80::/64]:944");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::IP(
                     IpAddr::V6(Ipv6Addr::from(0xfe800000000000000000000000000000_u128)),
                     IpAddr::V6(Ipv6Addr::from(0xffffffffffffffff0000000000000000_u128)),
                     PortOption::Specific(944),
                 )
-            )
+            ))
         );
     }
 
@@ -458,26 +420,26 @@ mod tests {
         let result = parse_arg("^aa:bb:cc:dd:ee:ff");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Source,
                 Address::MAC(MacAddr(0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff))
-            )
+            ))
         );
         let result = parse_arg("@aa:bb:cc:dd:ee:ff");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Destination,
                 Address::MAC(MacAddr(0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff))
-            )
+            ))
         );
         let result = parse_arg("aa:bb:cc:dd:ee:ff");
         assert_eq!(
             result.unwrap(),
-            Argument::AddressFilter(
+            Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
                 Address::MAC(MacAddr(0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff))
-            )
+            ))
         );
     }
 
@@ -486,7 +448,7 @@ mod tests {
         let result = parse_arg("192.168.1.1=192.168.1.100");
         assert_eq!(
             result.unwrap(),
-            Argument::PacketFilter(
+            Argument::FilterExpr(Filter::PacketFilter(
                 PacketDirection::Either,
                 Address::IP(
                     IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)),
@@ -499,12 +461,12 @@ mod tests {
                     IpAddr::V4(Ipv4Addr::new(255, 255, 255, 255)),
                     PortOption::Range(1, u16::MAX),
                 ),
-            )
+            ))
         );
         let result = parse_arg("192.168.1.1/24:53=192.168.100.100/24");
         assert_eq!(
             result.unwrap(),
-            Argument::PacketFilter(
+            Argument::FilterExpr(Filter::PacketFilter(
                 PacketDirection::Either,
                 Address::IP(
                     IpAddr::V4(Ipv4Addr::new(192, 168, 1, 0)),
@@ -517,12 +479,12 @@ mod tests {
                     IpAddr::V4(Ipv4Addr::new(255, 255, 255, 0)),
                     PortOption::Range(1, u16::MAX),
                 ),
-            )
+            ))
         );
         let result = parse_arg("^192.168.1.1/24:53@192.168.100.100/24");
         assert_eq!(
             result.unwrap(),
-            Argument::PacketFilter(
+            Argument::FilterExpr(Filter::PacketFilter(
                 PacketDirection::Source,
                 Address::IP(
                     IpAddr::V4(Ipv4Addr::new(192, 168, 1, 0)),
@@ -535,7 +497,7 @@ mod tests {
                     IpAddr::V4(Ipv4Addr::new(255, 255, 255, 0)),
                     PortOption::Range(1, u16::MAX),
                 ),
-            )
+            ))
         );
     }
 
