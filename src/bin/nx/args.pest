@@ -1,4 +1,4 @@
-protocol = { "tcp" | "udp" | "icmp" | "ethernet" }
+protocol = { "tcp" | "udp" | "icmp" | "arp" }
 pcap = { "pcap" }
 destination = @{ "@" }
 source = @{ "^" }

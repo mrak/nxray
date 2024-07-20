@@ -10,7 +10,7 @@ struct Settings {
     tcp: bool,
     udp: bool,
     icmp: bool,
-    ethernet: bool,
+    arp: bool,
     interfaces: Vec<String>,
     filters: Vec<Filter>,
 }
@@ -26,7 +26,7 @@ fn main() {
             Ok(Argument::ProtocolFlag(Protocol::TCP)) => s.tcp = true,
             Ok(Argument::ProtocolFlag(Protocol::UDP)) => s.udp = true,
             Ok(Argument::ProtocolFlag(Protocol::ICMP)) => s.icmp = true,
-            Ok(Argument::ProtocolFlag(Protocol::Ethernet)) => s.ethernet = true,
+            Ok(Argument::ProtocolFlag(Protocol::ARP)) => s.arp = true,
             Ok(Argument::Interface(i)) => s.interfaces.push(i.to_string()),
             Ok(Argument::FilterExpr(f)) => s.filters.push(f),
             Err(e) => {
@@ -36,12 +36,12 @@ fn main() {
         }
     }
 
-    match (s.tcp, s.udp, s.icmp, s.ethernet) {
+    match (s.tcp, s.udp, s.icmp, s.arp) {
         (true, true, true, true) => {
             s.tcp = true;
             s.udp = true;
             s.icmp = true;
-            s.ethernet = true;
+            s.arp = true;
         }
         _ => {}
     }
