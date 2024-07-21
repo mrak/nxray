@@ -59,8 +59,8 @@ fn main() {
         (false, false, false, false) => {
             s.tcp = true;
             s.udp = true;
-            s.icmp = true;
-            s.arp = true;
+            s.icmp = false;
+            s.arp = false;
         }
         _ => {}
     }
@@ -68,7 +68,7 @@ fn main() {
     let (snd, rcv): (Sender<(u32, Vec<u8>)>, Receiver<(u32, Vec<u8>)>) = mpsc::channel();
 
     capture_packets(&s, snd);
-    filter_and_print_packets(&s, rcv);
+    print_packets(&s, rcv);
 }
 
 fn capture_packets(settings: &Settings, sender: Sender<(u32, Vec<u8>)>) {
@@ -114,7 +114,7 @@ fn capture_packets(settings: &Settings, sender: Sender<(u32, Vec<u8>)>) {
     }
 }
 
-fn filter_and_print_packets(settings: &Settings, receiver: Receiver<(u32, Vec<u8>)>) {
+fn print_packets(settings: &Settings, receiver: Receiver<(u32, Vec<u8>)>) {
     let interfaces = datalink::interfaces();
     loop {
         match receiver.recv() {
@@ -246,6 +246,86 @@ fn escape_payload(payload: &[u8]) -> String {
     .unwrap()
 }
 
+fn port_opt_match(port_opt: &PortOption, port: &u16) -> bool {
+    match port_opt {
+        PortOption::Specific(p) => port == p,
+        PortOption::List(l) => l.contains(&port),
+        PortOption::Range(l, r) => l <= port && port <= r,
+    }
+}
+
+fn filters_match_tcp_or_udp(
+    filters: &Vec<Filter>,
+    src_addr: IpAddr,
+    src_port: u16,
+    dst_addr: IpAddr,
+    dst_port: u16,
+) -> bool {
+    if filters.is_empty() {
+        return true;
+    }
+    let address_match = |dir: &PacketDirection, addr: &Address| -> bool {
+        match addr {
+            Address::IP(ip, port_opt) => match dir {
+                PacketDirection::Source => {
+                    if ip.contains(src_addr) && port_opt_match(&port_opt, &src_port) {
+                        return true;
+                    }
+                }
+                PacketDirection::Destination => {
+                    if ip.contains(dst_addr) && port_opt_match(&port_opt, &dst_port) {
+                        return true;
+                    }
+                }
+                PacketDirection::Either => {
+                    if (ip.contains(dst_addr) && port_opt_match(&port_opt, &dst_port))
+                        || (ip.contains(src_addr) && port_opt_match(&port_opt, &src_port))
+                    {
+                        return true;
+                    }
+                }
+            },
+            Address::PortOnly(port_opt) => match dir {
+                PacketDirection::Source => {
+                    if port_opt_match(&port_opt, &src_port) {
+                        return true;
+                    }
+                }
+                PacketDirection::Destination => {
+                    if port_opt_match(&port_opt, &dst_port) {
+                        return true;
+                    }
+                }
+                PacketDirection::Either => {
+                    if port_opt_match(&port_opt, &dst_port) || port_opt_match(&port_opt, &src_port)
+                    {
+                        return true;
+                    }
+                }
+            },
+            Address::MAC(_) => {}
+        }
+        false
+    };
+
+    for filter in filters {
+        match filter {
+            Filter::AddressFilter(dir, addr) => {
+                if address_match(dir, addr) {
+                    return true;
+                }
+            }
+            Filter::PacketFilter(dir1, addr1, dir2, addr2) => {
+                if address_match(dir1, addr1) && address_match(dir2, addr2) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
 fn process_tcp(
     settings: &Settings,
     interface_name: &str,
@@ -258,6 +338,15 @@ fn process_tcp(
     }
     match TcpPacket::new(packet) {
         Some(tcp_packet) => {
+            if !filters_match_tcp_or_udp(
+                &settings.filters,
+                source,
+                tcp_packet.get_source(),
+                destination,
+                tcp_packet.get_destination(),
+            ) {
+                return;
+            }
             println!(
                 "[{}] T {}:{} > {}:{} ~ {} #{} {}b",
                 interface_name,
@@ -269,7 +358,9 @@ fn process_tcp(
                 tcp_packet.get_sequence(),
                 tcp_packet.payload().len(),
             );
-            println!("{}", escape_payload(tcp_packet.payload()))
+            if !tcp_packet.payload().is_empty() {
+                println!("{}", escape_payload(tcp_packet.payload()))
+            }
         }
         None => println!("[{}] T Malformed packet", interface_name),
     }
@@ -287,6 +378,15 @@ fn process_udp(
     }
     match UdpPacket::new(packet) {
         Some(udp_packet) => {
+            if !filters_match_tcp_or_udp(
+                &settings.filters,
+                source,
+                udp_packet.get_source(),
+                destination,
+                udp_packet.get_destination(),
+            ) {
+                return;
+            }
             println!(
                 "[{}] U {}:{} > {}:{} ~ {}b",
                 interface_name,
@@ -296,7 +396,9 @@ fn process_udp(
                 udp_packet.get_destination(),
                 udp_packet.get_length(),
             );
-            println!("{}", escape_payload(udp_packet.payload()))
+            if !udp_packet.payload().is_empty() {
+                println!("{}", escape_payload(udp_packet.payload()))
+            }
         }
         None => println!("[{}] U Malformed packet", interface_name),
     }
