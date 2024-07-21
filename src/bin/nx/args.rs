@@ -4,7 +4,9 @@ use pest::iterators::Pair;
 use pest::Parser;
 use pest_derive::Parser;
 use pnet::datalink::MacAddr;
-use pnet::ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
+use pnet::ipnetwork::IpNetwork;
+use pnet::ipnetwork::Ipv4Network;
+use pnet::ipnetwork::Ipv6Network;
 use std::str::FromStr;
 
 #[derive(Parser)]
@@ -16,6 +18,7 @@ pub enum PortOption {
     Specific(u16),
     List(Vec<u16>),
     Range(u16, u16),
+    Any,
 }
 
 #[derive(PartialEq, Debug)]
@@ -106,7 +109,7 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
 
     fn parse_ip4_address(arg: Pair<Rule>) -> Result<Address, Error<Rule>> {
         let mut inner = arg.clone().into_inner();
-        let mut port_opt = PortOption::Range(1, u16::MAX);
+        let mut port_opt = PortOption::Any;
         let ip_str = inner.next().unwrap().as_str();
         let ip = ip_str.parse::<Ipv4Network>().or_else(|e| {
             Err(Error::new_from_span(
@@ -124,7 +127,7 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
 
     fn parse_ip6_address(arg: Pair<Rule>) -> Result<Address, Error<Rule>> {
         let mut inner = arg.clone().into_inner();
-        let mut port_opt = PortOption::Range(1, u16::MAX);
+        let mut port_opt = PortOption::Any;
         let ip_str = inner.next().unwrap().as_str();
         let ip = ip_str.parse::<Ipv6Network>().or_else(|e| {
             Err(Error::new_from_span(
@@ -301,7 +304,7 @@ mod tests {
                 PacketDirection::Either,
                 Address::IP(
                     IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 1, 1), 32).unwrap()),
-                    PortOption::Range(1, u16::MAX),
+                    PortOption::Any,
                 )
             ))
         );
@@ -334,7 +337,7 @@ mod tests {
                 PacketDirection::Either,
                 Address::IP(
                     IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 1, 1), 24).unwrap()),
-                    PortOption::Range(1, u16::MAX),
+                    PortOption::Any,
                 )
             ))
         );
@@ -355,7 +358,7 @@ mod tests {
                         )
                         .unwrap()
                     ),
-                    PortOption::Range(1, u16::MAX),
+                    PortOption::Any,
                 )
             ))
         );
@@ -372,7 +375,7 @@ mod tests {
                         )
                         .unwrap()
                     ),
-                    PortOption::Range(1, u16::MAX),
+                    PortOption::Any,
                 )
             ))
         );
@@ -449,12 +452,12 @@ mod tests {
                 PacketDirection::Either,
                 Address::IP(
                     IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 1, 1), 32).unwrap()),
-                    PortOption::Range(1, u16::MAX),
+                    PortOption::Any,
                 ),
                 PacketDirection::Either,
                 Address::IP(
                     IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 1, 100), 32).unwrap()),
-                    PortOption::Range(1, u16::MAX),
+                    PortOption::Any,
                 ),
             ))
         );
@@ -470,7 +473,7 @@ mod tests {
                 PacketDirection::Either,
                 Address::IP(
                     IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 100, 100), 24).unwrap()),
-                    PortOption::Range(1, u16::MAX),
+                    PortOption::Any,
                 ),
             ))
         );
@@ -486,7 +489,7 @@ mod tests {
                 PacketDirection::Destination,
                 Address::IP(
                     IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(192, 168, 100, 100), 24).unwrap()),
-                    PortOption::Range(1, u16::MAX),
+                    PortOption::Any,
                 ),
             ))
         );

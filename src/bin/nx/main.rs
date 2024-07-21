@@ -1,13 +1,18 @@
 mod args;
 
 use args::*;
+use pnet::datalink;
 use pnet::datalink::Channel::Ethernet;
-use pnet::datalink::{self, NetworkInterface};
+use pnet::datalink::MacAddr;
+use pnet::datalink::NetworkInterface;
 use pnet::packet::arp::ArpOperations;
 use pnet::packet::arp::ArpPacket;
-use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
-use pnet::packet::icmp::{IcmpPacket, IcmpTypes};
-use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
+use pnet::packet::ethernet::EtherTypes;
+use pnet::packet::ethernet::EthernetPacket;
+use pnet::packet::icmp::IcmpPacket;
+use pnet::packet::icmp::IcmpTypes;
+use pnet::packet::ip::IpNextHeaderProtocol;
+use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::tcp::TcpFlags;
@@ -19,7 +24,8 @@ use std::io::ErrorKind;
 use std::net::IpAddr;
 use std::process;
 use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
 use std::thread;
 use std::vec::Vec;
 
@@ -146,8 +152,10 @@ fn process_ipv4(settings: &Settings, interface_name: &str, packet: &EthernetPack
             process_transport(
                 settings,
                 interface_name,
-                IpAddr::V4(ipv4_packet.get_source()),
-                IpAddr::V4(ipv4_packet.get_destination()),
+                &packet.get_source(),
+                &IpAddr::V4(ipv4_packet.get_source()),
+                &packet.get_destination(),
+                &IpAddr::V4(ipv4_packet.get_destination()),
                 ipv4_packet.get_next_level_protocol(),
                 ipv4_packet.payload(),
             );
@@ -162,8 +170,10 @@ fn process_ipv6(settings: &Settings, interface_name: &str, packet: &EthernetPack
             process_transport(
                 settings,
                 interface_name,
-                IpAddr::V6(ipv6_packet.get_source()),
-                IpAddr::V6(ipv6_packet.get_destination()),
+                &packet.get_source(),
+                &IpAddr::V6(ipv6_packet.get_source()),
+                &packet.get_destination(),
+                &IpAddr::V6(ipv6_packet.get_destination()),
                 ipv6_packet.get_next_header(),
                 ipv6_packet.payload(),
             );
@@ -177,19 +187,32 @@ fn process_arp(settings: &Settings, interface_name: &str, packet: &EthernetPacke
         return;
     }
     match ArpPacket::new(packet.payload()) {
-        Some(arp_packet) => println!(
-            "[{}] A {}[{}] > {}[{}] ~ {}",
-            interface_name,
-            packet.get_source(),
-            arp_packet.get_sender_proto_addr(),
-            packet.get_destination(),
-            arp_packet.get_target_proto_addr(),
-            match arp_packet.get_operation() {
-                ArpOperations::Reply => "reply",
-                ArpOperations::Request => "request",
-                _ => "unknown",
-            },
-        ),
+        Some(arp_packet) => {
+            if !filters_match_criteria(
+                &settings.filters,
+                &packet.get_source(),
+                &IpAddr::V4(arp_packet.get_sender_proto_addr()),
+                0,
+                &packet.get_destination(),
+                &IpAddr::V4(arp_packet.get_target_proto_addr()),
+                0,
+            ) {
+                return;
+            }
+            println!(
+                "[{}] A {}[{}] > {}[{}] ~ {}",
+                interface_name,
+                packet.get_source(),
+                arp_packet.get_sender_proto_addr(),
+                packet.get_destination(),
+                arp_packet.get_target_proto_addr(),
+                match arp_packet.get_operation() {
+                    ArpOperations::Reply => "reply",
+                    ArpOperations::Request => "request",
+                    _ => "unknown",
+                },
+            )
+        }
         None => println!("[{}] A Malformed packet", interface_name),
     }
 }
@@ -197,24 +220,50 @@ fn process_arp(settings: &Settings, interface_name: &str, packet: &EthernetPacke
 fn process_transport(
     settings: &Settings,
     interface_name: &str,
-    source: IpAddr,
-    destination: IpAddr,
+    source_mac: &MacAddr,
+    source: &IpAddr,
+    destination_mac: &MacAddr,
+    destination: &IpAddr,
     protocol: IpNextHeaderProtocol,
     packet: &[u8],
 ) {
     match protocol {
-        IpNextHeaderProtocols::Tcp => {
-            process_tcp(settings, interface_name, source, destination, packet)
-        }
-        IpNextHeaderProtocols::Udp => {
-            process_udp(settings, interface_name, source, destination, packet)
-        }
-        IpNextHeaderProtocols::Icmp => {
-            process_icmp(settings, interface_name, source, destination, packet)
-        }
-        IpNextHeaderProtocols::Icmpv6 => {
-            process_icmpv6(settings, interface_name, source, destination, packet)
-        }
+        IpNextHeaderProtocols::Tcp => process_tcp(
+            settings,
+            interface_name,
+            source_mac,
+            source,
+            destination_mac,
+            destination,
+            packet,
+        ),
+        IpNextHeaderProtocols::Udp => process_udp(
+            settings,
+            interface_name,
+            source_mac,
+            source,
+            destination_mac,
+            destination,
+            packet,
+        ),
+        IpNextHeaderProtocols::Icmp => process_icmp(
+            settings,
+            interface_name,
+            source_mac,
+            source,
+            destination_mac,
+            destination,
+            packet,
+        ),
+        IpNextHeaderProtocols::Icmpv6 => process_icmpv6(
+            settings,
+            interface_name,
+            source_mac,
+            source,
+            destination_mac,
+            destination,
+            packet,
+        ),
         _ => println!("[{}] Unknown packet", interface_name),
     }
 }
@@ -246,19 +295,28 @@ fn escape_payload(payload: &[u8]) -> String {
     .unwrap()
 }
 
-fn port_opt_match(port_opt: &PortOption, port: &u16) -> bool {
+fn port_opt_match(port_opt: &PortOption, port: u16) -> bool {
+    // POSIX.2024, port 0 is reserverd for "random port"
+    // As that is senseless for matching ports, we use it here
+    // as a wildcard match instead of a union type for the u16 field.
+    if port == 0 {
+        return true;
+    }
     match port_opt {
-        PortOption::Specific(p) => port == p,
+        PortOption::Specific(p) => port == *p,
         PortOption::List(l) => l.contains(&port),
-        PortOption::Range(l, r) => l <= port && port <= r,
+        PortOption::Range(l, r) => *l <= port && port <= *r,
+        PortOption::Any => true,
     }
 }
 
-fn filters_match_tcp_or_udp(
+fn filters_match_criteria(
     filters: &Vec<Filter>,
-    src_addr: IpAddr,
+    src_mac: &MacAddr,
+    src_addr: &IpAddr,
     src_port: u16,
-    dst_addr: IpAddr,
+    dst_mac: &MacAddr,
+    dst_addr: &IpAddr,
     dst_port: u16,
 ) -> bool {
     if filters.is_empty() {
@@ -268,18 +326,18 @@ fn filters_match_tcp_or_udp(
         match addr {
             Address::IP(ip, port_opt) => match dir {
                 PacketDirection::Source => {
-                    if ip.contains(src_addr) && port_opt_match(&port_opt, &src_port) {
+                    if ip.contains(*src_addr) && port_opt_match(&port_opt, src_port) {
                         return true;
                     }
                 }
                 PacketDirection::Destination => {
-                    if ip.contains(dst_addr) && port_opt_match(&port_opt, &dst_port) {
+                    if ip.contains(*dst_addr) && port_opt_match(&port_opt, dst_port) {
                         return true;
                     }
                 }
                 PacketDirection::Either => {
-                    if (ip.contains(dst_addr) && port_opt_match(&port_opt, &dst_port))
-                        || (ip.contains(src_addr) && port_opt_match(&port_opt, &src_port))
+                    if (ip.contains(*dst_addr) && port_opt_match(&port_opt, dst_port))
+                        || (ip.contains(*src_addr) && port_opt_match(&port_opt, src_port))
                     {
                         return true;
                     }
@@ -287,23 +345,38 @@ fn filters_match_tcp_or_udp(
             },
             Address::PortOnly(port_opt) => match dir {
                 PacketDirection::Source => {
-                    if port_opt_match(&port_opt, &src_port) {
+                    if port_opt_match(&port_opt, src_port) {
                         return true;
                     }
                 }
                 PacketDirection::Destination => {
-                    if port_opt_match(&port_opt, &dst_port) {
+                    if port_opt_match(&port_opt, dst_port) {
                         return true;
                     }
                 }
                 PacketDirection::Either => {
-                    if port_opt_match(&port_opt, &dst_port) || port_opt_match(&port_opt, &src_port)
-                    {
+                    if port_opt_match(&port_opt, dst_port) || port_opt_match(&port_opt, src_port) {
                         return true;
                     }
                 }
             },
-            Address::MAC(_) => {}
+            Address::MAC(m) => match dir {
+                PacketDirection::Source => {
+                    if m == src_mac {
+                        return true;
+                    }
+                }
+                PacketDirection::Destination => {
+                    if m == dst_mac {
+                        return true;
+                    }
+                }
+                PacketDirection::Either => {
+                    if m == dst_mac || m == src_mac {
+                        return true;
+                    }
+                }
+            },
         }
         false
     };
@@ -329,8 +402,10 @@ fn filters_match_tcp_or_udp(
 fn process_tcp(
     settings: &Settings,
     interface_name: &str,
-    source: IpAddr,
-    destination: IpAddr,
+    source_mac: &MacAddr,
+    source: &IpAddr,
+    destination_mac: &MacAddr,
+    destination: &IpAddr,
     packet: &[u8],
 ) {
     if !settings.tcp {
@@ -338,10 +413,12 @@ fn process_tcp(
     }
     match TcpPacket::new(packet) {
         Some(tcp_packet) => {
-            if !filters_match_tcp_or_udp(
+            if !filters_match_criteria(
                 &settings.filters,
+                source_mac,
                 source,
                 tcp_packet.get_source(),
+                destination_mac,
                 destination,
                 tcp_packet.get_destination(),
             ) {
@@ -369,8 +446,10 @@ fn process_tcp(
 fn process_udp(
     settings: &Settings,
     interface_name: &str,
-    source: IpAddr,
-    destination: IpAddr,
+    source_mac: &MacAddr,
+    source: &IpAddr,
+    destination_mac: &MacAddr,
+    destination: &IpAddr,
     packet: &[u8],
 ) {
     if !settings.udp {
@@ -378,10 +457,12 @@ fn process_udp(
     }
     match UdpPacket::new(packet) {
         Some(udp_packet) => {
-            if !filters_match_tcp_or_udp(
+            if !filters_match_criteria(
                 &settings.filters,
+                source_mac,
                 source,
                 udp_packet.get_source(),
+                destination_mac,
                 destination,
                 udp_packet.get_destination(),
             ) {
@@ -407,11 +488,24 @@ fn process_udp(
 fn process_icmp(
     settings: &Settings,
     interface_name: &str,
-    source: IpAddr,
-    destination: IpAddr,
+    source_mac: &MacAddr,
+    source: &IpAddr,
+    destination_mac: &MacAddr,
+    destination: &IpAddr,
     packet: &[u8],
 ) {
     if !settings.icmp {
+        return;
+    }
+    if !filters_match_criteria(
+        &settings.filters,
+        source_mac,
+        source,
+        0,
+        destination_mac,
+        destination,
+        0,
+    ) {
         return;
     }
     match IcmpPacket::new(packet) {
@@ -426,11 +520,24 @@ fn process_icmp(
 fn process_icmpv6(
     settings: &Settings,
     interface_name: &str,
-    source: IpAddr,
-    destination: IpAddr,
+    source_mac: &MacAddr,
+    source: &IpAddr,
+    destination_mac: &MacAddr,
+    destination: &IpAddr,
     packet: &[u8],
 ) {
     if !settings.icmp {
+        return;
+    }
+    if !filters_match_criteria(
+        &settings.filters,
+        source_mac,
+        source,
+        0,
+        destination_mac,
+        destination,
+        0,
+    ) {
         return;
     }
     match IcmpPacket::new(packet) {
