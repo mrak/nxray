@@ -61,3 +61,10 @@ Assuming local network is `192.168.1.0/24`:
 ```console
 # nx ^10.1.2.3
 ```
+
+# Development TODO
+
+- [ ] pcap format
+- [ ] colorized output
+- [ ] man(1) page
+- [ ] ethernet-frame-only filtering
