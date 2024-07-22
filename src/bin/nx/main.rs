@@ -46,6 +46,7 @@ fn version() {
     println!("nx: {}", VERSION);
     process::exit(0);
 }
+
 fn usage() {}
 
 fn main() {
@@ -78,7 +79,7 @@ fn main() {
         s.arp = false;
     }
 
-    let (snd, rcv): (Sender<(u32, Vec<u8>)>, Receiver<(u32, Vec<u8>)>) = mpsc::channel();
+    let (snd, rcv) = mpsc::channel();
 
     capture_packets(&s, snd);
     print_packets(&s, rcv);
@@ -224,6 +225,7 @@ fn process_arp(settings: &Settings, interface_name: &str, packet: &EthernetPacke
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_transport(
     settings: &Settings,
     interface_name: &str,
