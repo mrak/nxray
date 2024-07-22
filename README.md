@@ -9,7 +9,7 @@ information based on L2 to L4[¹](https://en.wikipedia.org/wiki/OSI_model) crite
 ## Examples
 
 Notice that any example command preceded by `#` denotes root or privileged
-access to the system. Anywhere `MY.LOCAL.IP.ADDr` is present is replaced with your actual
+access to the system. Anywhere `MY.LOCAL.IP.ADDR` is present is replaced with your actual
 machine IP address.
 
 ### Show all TCP or UDP packets
