@@ -48,10 +48,10 @@ fn main() {
     for argument in env::args().skip(1) {
         match parse_arg(argument.as_str()) {
             Ok(Argument::Pcap) => s.pcap = true,
-            Ok(Argument::ProtocolFlag(Protocol::TCP)) => s.tcp = true,
-            Ok(Argument::ProtocolFlag(Protocol::UDP)) => s.udp = true,
-            Ok(Argument::ProtocolFlag(Protocol::ICMP)) => s.icmp = true,
-            Ok(Argument::ProtocolFlag(Protocol::ARP)) => s.arp = true,
+            Ok(Argument::ProtocolFlag(Protocol::Tcp)) => s.tcp = true,
+            Ok(Argument::ProtocolFlag(Protocol::Udp)) => s.udp = true,
+            Ok(Argument::ProtocolFlag(Protocol::Icmp)) => s.icmp = true,
+            Ok(Argument::ProtocolFlag(Protocol::Arp)) => s.arp = true,
             Ok(Argument::Interface(i)) => s.interfaces.push(i.to_string()),
             Ok(Argument::FilterExpr(f)) => s.filters.push(f),
             Err(e) => {
@@ -61,14 +61,11 @@ fn main() {
         }
     }
 
-    match (s.tcp, s.udp, s.icmp, s.arp) {
-        (false, false, false, false) => {
-            s.tcp = true;
-            s.udp = true;
-            s.icmp = false;
-            s.arp = false;
-        }
-        _ => {}
+    if let (false, false, false, false) = (s.tcp, s.udp, s.icmp, s.arp) {
+        s.tcp = true;
+        s.udp = true;
+        s.icmp = false;
+        s.arp = false;
     }
 
     let (snd, rcv): (Sender<(u32, Vec<u8>)>, Receiver<(u32, Vec<u8>)>) = mpsc::channel();
@@ -79,7 +76,7 @@ fn main() {
 
 fn capture_packets(settings: &Settings, sender: Sender<(u32, Vec<u8>)>) {
     let interfaces = match &settings.interfaces {
-        x if x.len() == 0 => datalink::interfaces(),
+        x if x.is_empty() => datalink::interfaces(),
         x => {
             let interface_name_matcher = |interface: &NetworkInterface| x.contains(&interface.name);
             datalink::interfaces()
@@ -326,18 +323,18 @@ fn filters_match_criteria(
         match addr {
             Address::IP(ip, port_opt) => match dir {
                 PacketDirection::Source => {
-                    if ip.contains(*src_addr) && port_opt_match(&port_opt, src_port) {
+                    if ip.contains(*src_addr) && port_opt_match(port_opt, src_port) {
                         return true;
                     }
                 }
                 PacketDirection::Destination => {
-                    if ip.contains(*dst_addr) && port_opt_match(&port_opt, dst_port) {
+                    if ip.contains(*dst_addr) && port_opt_match(port_opt, dst_port) {
                         return true;
                     }
                 }
                 PacketDirection::Either => {
-                    if (ip.contains(*dst_addr) && port_opt_match(&port_opt, dst_port))
-                        || (ip.contains(*src_addr) && port_opt_match(&port_opt, src_port))
+                    if (ip.contains(*dst_addr) && port_opt_match(port_opt, dst_port))
+                        || (ip.contains(*src_addr) && port_opt_match(port_opt, src_port))
                     {
                         return true;
                     }
@@ -345,22 +342,22 @@ fn filters_match_criteria(
             },
             Address::PortOnly(port_opt) => match dir {
                 PacketDirection::Source => {
-                    if port_opt_match(&port_opt, src_port) {
+                    if port_opt_match(port_opt, src_port) {
                         return true;
                     }
                 }
                 PacketDirection::Destination => {
-                    if port_opt_match(&port_opt, dst_port) {
+                    if port_opt_match(port_opt, dst_port) {
                         return true;
                     }
                 }
                 PacketDirection::Either => {
-                    if port_opt_match(&port_opt, dst_port) || port_opt_match(&port_opt, src_port) {
+                    if port_opt_match(port_opt, dst_port) || port_opt_match(port_opt, src_port) {
                         return true;
                     }
                 }
             },
-            Address::MAC(m) => match dir {
+            Address::Mac(m) => match dir {
                 PacketDirection::Source => {
                     if m == src_mac {
                         return true;
@@ -548,3 +545,14 @@ fn process_icmpv6(
         None => println!("[{}] I Malformed packet", interface_name),
     }
 }
+
+//#[cfg(test)]
+//mod tests {
+//    use super::*;
+//
+//    #[test]
+//    fn filters_match_criteria_tcp() {
+//        let result = filters_match_criteria();
+//        assert!(result)
+//    }
+//}

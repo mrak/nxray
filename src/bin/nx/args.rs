@@ -23,7 +23,7 @@ pub enum PortOption {
 
 #[derive(PartialEq, Debug)]
 pub enum Address {
-    MAC(MacAddr),
+    Mac(MacAddr),
     IP(IpNetwork, PortOption),
     PortOnly(PortOption),
 }
@@ -37,20 +37,20 @@ pub enum PacketDirection {
 
 #[derive(PartialEq, Debug)]
 pub enum Protocol {
-    TCP,
-    UDP,
-    ICMP,
-    ARP,
+    Tcp,
+    Udp,
+    Icmp,
+    Arp,
 }
 
 impl FromStr for Protocol {
     type Err = ();
     fn from_str(input: &str) -> Result<Protocol, Self::Err> {
         match input {
-            "tcp" => Ok(Protocol::TCP),
-            "udp" => Ok(Protocol::UDP),
-            "icmp" => Ok(Protocol::ICMP),
-            "arp" => Ok(Protocol::ARP),
+            "tcp" => Ok(Protocol::Tcp),
+            "udp" => Ok(Protocol::Udp),
+            "icmp" => Ok(Protocol::Icmp),
+            "arp" => Ok(Protocol::Arp),
             _ => Err(()),
         }
     }
@@ -70,26 +70,26 @@ pub enum Argument<'a> {
     FilterExpr(Filter),
 }
 
-pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
-    fn parse_port(arg: Pair<Rule>) -> Result<u16, Error<Rule>> {
-        arg.as_str().parse::<u16>().or_else(|e| {
-            Err(Error::new_from_span(
+pub fn parse_arg(argstr: &str) -> Result<Argument, Box<Error<Rule>>> {
+    fn parse_port(arg: Pair<Rule>) -> Result<u16, Box<Error<Rule>>> {
+        Ok(arg.as_str().parse::<u16>().map_err(|e| {
+            Error::new_from_span(
                 ErrorVariant::<Rule>::CustomError {
                     message: e.to_string(),
                 },
                 arg.as_span(),
-            ))
-        })
+            )
+        })?)
     }
 
-    fn parse_port_opt(arg: Pair<Rule>) -> Result<PortOption, Error<Rule>> {
+    fn parse_port_opt(arg: Pair<Rule>) -> Result<PortOption, Box<Error<Rule>>> {
         let opt = arg.into_inner().next().unwrap();
         Ok(match opt.as_rule() {
             Rule::port => PortOption::Specific(opt.as_str().parse::<u16>().unwrap()),
             Rule::port_list => PortOption::List(
                 opt.into_inner()
                     .map(parse_port)
-                    .collect::<Result<Vec<u16>, Error<Rule>>>()?,
+                    .collect::<Result<Vec<u16>, Box<Error<Rule>>>>()?,
             ),
             Rule::port_range_lower => {
                 PortOption::Range(0, opt.into_inner().as_str().parse::<u16>().unwrap())
@@ -107,17 +107,17 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
         })
     }
 
-    fn parse_ip4_address(arg: Pair<Rule>) -> Result<Address, Error<Rule>> {
+    fn parse_ip4_address(arg: Pair<Rule>) -> Result<Address, Box<Error<Rule>>> {
         let mut inner = arg.clone().into_inner();
         let mut port_opt = PortOption::Any;
         let ip_str = inner.next().unwrap().as_str();
-        let ip = ip_str.parse::<Ipv4Network>().or_else(|e| {
-            Err(Error::new_from_span(
+        let ip = ip_str.parse::<Ipv4Network>().map_err(|e| {
+            Error::new_from_span(
                 ErrorVariant::<Rule>::CustomError {
                     message: e.to_string(),
                 },
                 arg.as_span(),
-            ))
+            )
         })?;
         if let Some(n) = inner.next() {
             port_opt = parse_port_opt(n)?
@@ -125,17 +125,17 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
         Ok(Address::IP(IpNetwork::V4(ip), port_opt))
     }
 
-    fn parse_ip6_address(arg: Pair<Rule>) -> Result<Address, Error<Rule>> {
+    fn parse_ip6_address(arg: Pair<Rule>) -> Result<Address, Box<Error<Rule>>> {
         let mut inner = arg.clone().into_inner();
         let mut port_opt = PortOption::Any;
         let ip_str = inner.next().unwrap().as_str();
-        let ip = ip_str.parse::<Ipv6Network>().or_else(|e| {
-            Err(Error::new_from_span(
+        let ip = ip_str.parse::<Ipv6Network>().map_err(|e| {
+            Error::new_from_span(
                 ErrorVariant::<Rule>::CustomError {
                     message: e.to_string(),
                 },
                 arg.as_span(),
-            ))
+            )
         })?;
         if let Some(n) = inner.next() {
             port_opt = parse_port_opt(n)?
@@ -143,18 +143,20 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
         Ok(Address::IP(IpNetwork::V6(ip), port_opt))
     }
 
-    fn parse_address(arg: Pair<Rule>) -> Result<Address, Error<Rule>> {
+    fn parse_address(arg: Pair<Rule>) -> Result<Address, Box<Error<Rule>>> {
         let a = arg.into_inner().next().unwrap();
         match a.as_rule() {
             Rule::port_opt => Ok(Address::PortOnly(parse_port_opt(a)?)),
             Rule::ipv4_address => parse_ip4_address(a),
             Rule::ipv6_address => parse_ip6_address(a),
-            Rule::mac_address => Ok(Address::MAC(a.as_str().parse::<MacAddr>().unwrap())),
+            Rule::mac_address => Ok(Address::Mac(a.as_str().parse::<MacAddr>().unwrap())),
             _ => unreachable!(),
         }
     }
 
-    fn parse_anchor_address(arg: Pair<Rule>) -> Result<(PacketDirection, Address), Error<Rule>> {
+    fn parse_anchor_address(
+        arg: Pair<Rule>,
+    ) -> Result<(PacketDirection, Address), Box<Error<Rule>>> {
         let mut inner = arg.into_inner();
         let direction = match inner.next().unwrap().into_inner().next().unwrap().as_rule() {
             Rule::source => PacketDirection::Source,
@@ -208,6 +210,7 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Error<Rule>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::{Ipv4Addr, Ipv6Addr};
 
     #[test]
     fn pcap() {
@@ -218,13 +221,13 @@ mod tests {
     #[test]
     fn protocol() {
         let result = parse_arg("tcp");
-        assert_eq!(result.unwrap(), Argument::ProtocolFlag(Protocol::TCP));
+        assert_eq!(result.unwrap(), Argument::ProtocolFlag(Protocol::Tcp));
         let result = parse_arg("udp");
-        assert_eq!(result.unwrap(), Argument::ProtocolFlag(Protocol::UDP));
+        assert_eq!(result.unwrap(), Argument::ProtocolFlag(Protocol::Udp));
         let result = parse_arg("icmp");
-        assert_eq!(result.unwrap(), Argument::ProtocolFlag(Protocol::ICMP));
+        assert_eq!(result.unwrap(), Argument::ProtocolFlag(Protocol::Icmp));
         let result = parse_arg("arp");
-        assert_eq!(result.unwrap(), Argument::ProtocolFlag(Protocol::ARP));
+        assert_eq!(result.unwrap(), Argument::ProtocolFlag(Protocol::Arp));
     }
 
     #[test]
@@ -422,7 +425,7 @@ mod tests {
             result.unwrap(),
             Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Source,
-                Address::MAC(MacAddr(0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff))
+                Address::Mac(MacAddr(0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff))
             ))
         );
         let result = parse_arg("@aa:bb:cc:dd:ee:ff");
@@ -430,7 +433,7 @@ mod tests {
             result.unwrap(),
             Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Destination,
-                Address::MAC(MacAddr(0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff))
+                Address::Mac(MacAddr(0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff))
             ))
         );
         let result = parse_arg("aa:bb:cc:dd:ee:ff");
@@ -438,7 +441,7 @@ mod tests {
             result.unwrap(),
             Argument::FilterExpr(Filter::AddressFilter(
                 PacketDirection::Either,
-                Address::MAC(MacAddr(0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff))
+                Address::Mac(MacAddr(0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff))
             ))
         );
     }
