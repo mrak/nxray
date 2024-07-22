@@ -29,6 +29,8 @@ use std::sync::mpsc::Sender;
 use std::thread;
 use std::vec::Vec;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[derive(Default, Debug)]
 struct Settings {
     pcap: bool,
@@ -40,7 +42,10 @@ struct Settings {
     filters: Vec<Filter>,
 }
 
-fn version() {}
+fn version() {
+    println!("nx: {}", VERSION);
+    process::exit(0);
+}
 fn usage() {}
 
 fn main() {
