@@ -546,13 +546,117 @@ fn process_icmpv6(
     }
 }
 
-//#[cfg(test)]
-//mod tests {
-//    use super::*;
-//
-//    #[test]
-//    fn filters_match_criteria_tcp() {
-//        let result = filters_match_criteria();
-//        assert!(result)
-//    }
-//}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args_to_filters(args: &[&str]) -> Vec<Filter> {
+        args.into_iter()
+            .map(|a| {
+                let Argument::FilterExpr(f) = parse_arg(a).unwrap() else {
+                    panic!()
+                };
+                f
+            })
+            .collect()
+    }
+
+    #[test]
+    fn filters_match_criteria_tcp() {
+        let ipv4_packet = |args: &[&str]| -> bool {
+            let filters = args_to_filters(args);
+            filters_match_criteria(
+                &filters,
+                &"aa:bb:cc:dd:ee:ff".parse().unwrap(),
+                &"192.168.1.1".parse().unwrap(),
+                22,
+                &"ff:ee:dd:cc:bb:aa".parse().unwrap(),
+                &"10.0.0.5".parse().unwrap(),
+                22,
+            )
+        };
+
+        let ipv6_packet = |args: &[&str]| -> bool {
+            let filters = args_to_filters(args);
+            filters_match_criteria(
+                &filters,
+                &"aa:bb:cc:dd:ee:ff".parse().unwrap(),
+                &"2001:db8::4321:1313".parse().unwrap(),
+                22,
+                &"ff:ee:dd:cc:bb:aa".parse().unwrap(),
+                &"2001:db8::1234:4444".parse().unwrap(),
+                22,
+            )
+        };
+
+        assert_eq!(true, ipv4_packet(&[]));
+        assert_eq!(true, ipv6_packet(&[]));
+
+        assert_eq!(true, ipv6_packet(&["2001:db8::4321:1313"]));
+        assert_eq!(true, ipv6_packet(&["2001:db8::1234:4444"]));
+
+        assert_eq!(true, ipv4_packet(&["192.168.1.1"]));
+        assert_eq!(true, ipv4_packet(&["10.0.0.5"]));
+        assert_ne!(true, ipv4_packet(&["192.168.100.100"]));
+        assert_eq!(true, ipv4_packet(&["10.0.0.0/8"]));
+        assert_eq!(true, ipv4_packet(&["192.168.0.0/16"]));
+        assert_ne!(true, ipv4_packet(&["10.0.0.0:22"]));
+        assert_eq!(true, ipv4_packet(&["10.0.0.5:22"]));
+        assert_ne!(true, ipv4_packet(&["192.168.0.0:22"]));
+        assert_eq!(true, ipv4_packet(&["192.168.1.1:22"]));
+        assert_eq!(true, ipv4_packet(&["192.168.1.1/16:22"]));
+        assert_eq!(true, ipv4_packet(&["10.0.0.0/8:22"]));
+        assert_eq!(true, ipv4_packet(&["10.0.0.0/8:22,2222"]));
+        assert_eq!(true, ipv4_packet(&["10.0.0.0/8:20-25"]));
+        assert_eq!(true, ipv4_packet(&["10.0.0.0/8:20-65535"]));
+        assert_eq!(true, ipv4_packet(&["10.0.0.0/8:-22"]));
+        assert_ne!(true, ipv4_packet(&["192.168.100.1/24:-22"]));
+
+        assert_ne!(true, ipv4_packet(&["@192.168.1.1"]));
+        assert_ne!(true, ipv4_packet(&["^10.0.0.5"]));
+        assert_ne!(true, ipv4_packet(&["@192.168.100.100"]));
+        assert_ne!(true, ipv4_packet(&["^10.0.0.0/8"]));
+        assert_ne!(true, ipv4_packet(&["@192.168.0.0/16"]));
+        assert_ne!(true, ipv4_packet(&["^10.0.0.0:22"]));
+        assert_ne!(true, ipv4_packet(&["^10.0.0.5:22"]));
+        assert_ne!(true, ipv4_packet(&["@192.168.0.0:22"]));
+        assert_ne!(true, ipv4_packet(&["@192.168.1.1:22"]));
+        assert_ne!(true, ipv4_packet(&["@192.168.1.1/16:22"]));
+        assert_ne!(true, ipv4_packet(&["^10.0.0.0/8:22"]));
+        assert_ne!(true, ipv4_packet(&["^10.0.0.0/8:22,2222"]));
+        assert_ne!(true, ipv4_packet(&["^10.0.0.0/8:20-25"]));
+        assert_ne!(true, ipv4_packet(&["^10.0.0.0/8:20-65535"]));
+        assert_ne!(true, ipv4_packet(&["^10.0.0.0/8:-22"]));
+        assert_ne!(true, ipv4_packet(&["@192.168.100.1/24:-22"]));
+
+        assert_eq!(true, ipv4_packet(&["^192.168.1.1"]));
+        assert_eq!(true, ipv4_packet(&["@10.0.0.5"]));
+        assert_ne!(true, ipv4_packet(&["^192.168.100.100"]));
+        assert_eq!(true, ipv4_packet(&["@10.0.0.0/8"]));
+        assert_eq!(true, ipv4_packet(&["^192.168.0.0/16"]));
+        assert_ne!(true, ipv4_packet(&["@10.0.0.0:22"]));
+        assert_eq!(true, ipv4_packet(&["@10.0.0.5:22"]));
+        assert_ne!(true, ipv4_packet(&["^192.168.0.0:22"]));
+        assert_eq!(true, ipv4_packet(&["^192.168.1.1:22"]));
+        assert_eq!(true, ipv4_packet(&["^192.168.1.1/16:22"]));
+        assert_eq!(true, ipv4_packet(&["@10.0.0.0/8:22"]));
+        assert_eq!(true, ipv4_packet(&["@10.0.0.0/8:22,2222"]));
+        assert_eq!(true, ipv4_packet(&["@10.0.0.0/8:20-25"]));
+        assert_eq!(true, ipv4_packet(&["@10.0.0.0/8:20-65535"]));
+        assert_eq!(true, ipv4_packet(&["@10.0.0.0/8:-22"]));
+        assert_ne!(true, ipv4_packet(&["^192.168.100.1/24:-22"]));
+
+        assert_eq!(true, ipv4_packet(&["10.0.0.0/8:-22", "192.168.1.1:22"]));
+        assert_eq!(true, ipv4_packet(&["10.0.0.0/8:-22", "192.168.100.1/24"]));
+        assert_ne!(true, ipv4_packet(&["172.16.0.0/12", "192.168.100.1/24"]));
+        assert_eq!(true, ipv4_packet(&["172.16.0.0/12", "10.0.0.0/8"]));
+
+        assert_ne!(true, ipv4_packet(&["@172.16.0.0/12^10.0.0.0/8"]));
+        assert_ne!(true, ipv4_packet(&["@192.168.0.0/12^10.0.0.0/8"]));
+        assert_eq!(true, ipv4_packet(&["^192.168.0.0/12@10.0.0.0/8"]));
+        assert_eq!(true, ipv4_packet(&["^192.168.1.1:22@10.0.0.5"]));
+
+        assert_eq!(true, ipv4_packet(&["192.168.1.1:22=10.0.0.5"]));
+        assert_eq!(true, ipv4_packet(&["10.0.0.5:22=192.168.1.1"]));
+    }
+}
