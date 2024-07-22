@@ -1,4 +1,6 @@
 protocol = { "tcp" | "udp" | "icmp" | "arp" }
+help = @{ "-"{0,2} ~ "help" | "-h" }
+version = @{ "-"{0,2} ~ "version" | "-v" }
 pcap = { "pcap" }
 destination = @{ "@" }
 source = @{ "^" }
@@ -25,6 +27,8 @@ ipv6_address = ${ ipv6_with_port | ipv6_no_port }
 mac_address = @{ (ASCII_HEX_DIGIT{2} ~ ":"){5} ~ ASCII_HEX_DIGIT{2} }
 interface = @{ (ASCII_ALPHANUMERIC | "-")+ }
 argument = { SOI ~ (pcap
+  | version
+  | help
   | protocol
   | packet_between
   | packet_anchored

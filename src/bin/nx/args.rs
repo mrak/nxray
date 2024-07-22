@@ -64,6 +64,8 @@ pub enum Filter {
 
 #[derive(PartialEq, Debug)]
 pub enum Argument<'a> {
+    Version,
+    Help,
     Pcap,
     Interface(&'a str),
     ProtocolFlag(Protocol),
@@ -176,6 +178,8 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Box<Error<Rule>>> {
 
     return Ok(match arg.as_rule() {
         Rule::pcap => Argument::Pcap,
+        Rule::version => Argument::Version,
+        Rule::help => Argument::Help,
         Rule::protocol => Argument::ProtocolFlag(Protocol::from_str(arg.as_str()).unwrap()),
         Rule::address => Argument::FilterExpr(Filter::AddressFilter(
             PacketDirection::Either,
@@ -496,6 +500,30 @@ mod tests {
                 ),
             ))
         );
+    }
+
+    #[test]
+    fn version() {
+        let result = parse_arg("version").unwrap();
+        assert_eq!(Argument::Version, result);
+        let result = parse_arg("-version").unwrap();
+        assert_eq!(Argument::Version, result);
+        let result = parse_arg("--version").unwrap();
+        assert_eq!(Argument::Version, result);
+        let result = parse_arg("-v").unwrap();
+        assert_eq!(Argument::Version, result);
+    }
+
+    #[test]
+    fn help() {
+        let result = parse_arg("help").unwrap();
+        assert_eq!(Argument::Help, result);
+        let result = parse_arg("-help").unwrap();
+        assert_eq!(Argument::Help, result);
+        let result = parse_arg("--help").unwrap();
+        assert_eq!(Argument::Help, result);
+        let result = parse_arg("-h").unwrap();
+        assert_eq!(Argument::Help, result);
     }
 
     #[test]
