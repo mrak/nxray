@@ -43,11 +43,15 @@ struct Settings {
 }
 
 fn version() {
-    println!("nx: {}", VERSION);
-    process::exit(0);
+    println!("nx version {}", VERSION);
 }
 
-fn usage() {}
+fn usage() {
+    version();
+    println!("Usage: nx [tcp] [udp] [icmp] [arp] [pcap]");
+    println!("          [filter-expression...]");
+    println!("          [interface...]");
+}
 
 fn main() {
     let mut s = Settings {
@@ -57,8 +61,14 @@ fn main() {
     for argument in env::args().skip(1) {
         match parse_arg(argument.as_str()) {
             Ok(Argument::Pcap) => s.pcap = true,
-            Ok(Argument::Version) => version(),
-            Ok(Argument::Help) => usage(),
+            Ok(Argument::Version) => {
+                version();
+                process::exit(0)
+            }
+            Ok(Argument::Help) => {
+                usage();
+                process::exit(0)
+            }
             Ok(Argument::ProtocolFlag(Protocol::Tcp)) => s.tcp = true,
             Ok(Argument::ProtocolFlag(Protocol::Udp)) => s.udp = true,
             Ok(Argument::ProtocolFlag(Protocol::Icmp)) => s.icmp = true,
