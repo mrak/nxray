@@ -1,6 +1,7 @@
 mod args;
 
 use args::*;
+use colored::Colorize;
 use pnet::datalink;
 use pnet::datalink::Channel::Ethernet;
 use pnet::datalink::MacAddr;
@@ -183,7 +184,7 @@ fn print_packets(settings: &Settings, receiver: Receiver<(u32, Vec<u8>)>) {
                     EtherTypes::Arp => {
                         process_arp(settings, &interfaces[index].name[..], &ethernet_packet)
                     }
-                    _ => eprintln!("[{}] ? Unknown packet type", interfaces[index].name),
+                    _ => {}
                 }
             }
             Err(_) => panic!("All interfaces closed"),
@@ -471,15 +472,18 @@ fn process_tcp(
                 return;
             }
             println!(
-                "[{}] T {}:{} > {}:{} ~ {} #{} {}b",
-                interface_name,
-                source,
-                tcp_packet.get_source(),
-                destination,
-                tcp_packet.get_destination(),
-                tcp_type_from_flags(tcp_packet.get_flags()),
-                tcp_packet.get_sequence(),
-                tcp_packet.payload().len(),
+                "[{}] {} {}{} > {}{} ~ {} {} {}",
+                interface_name.purple(),
+                "T".red().bold(),
+                source.to_string().green(),
+                format!(":{}", tcp_packet.get_source()).dimmed().green(),
+                destination.to_string().blue(),
+                format!(":{}", tcp_packet.get_destination()).dimmed().blue(),
+                tcp_type_from_flags(tcp_packet.get_flags())
+                    .to_string()
+                    .yellow(),
+                format!("#{}", tcp_packet.get_sequence()).dimmed().white(),
+                format!("{}b", tcp_packet.payload().len()).cyan(),
             );
             if !tcp_packet.payload().is_empty() {
                 println!("{}", escape_payload(tcp_packet.payload()))
@@ -515,13 +519,14 @@ fn process_udp(
                 return;
             }
             println!(
-                "[{}] U {}:{} > {}:{} ~ {}b",
-                interface_name,
-                source,
-                udp_packet.get_source(),
-                destination,
-                udp_packet.get_destination(),
-                udp_packet.get_length(),
+                "[{}] {} {}{} > {}{} ~ {}",
+                interface_name.purple(),
+                "U".red().bold(),
+                source.to_string().green(),
+                format!(":{}", udp_packet.get_source()).dimmed().green(),
+                destination.to_string().blue(),
+                format!(":{}", udp_packet.get_destination()).dimmed().blue(),
+                format!("{}b", udp_packet.get_length()).cyan(),
             );
             if !udp_packet.payload().is_empty() {
                 println!("{}", escape_payload(udp_packet.payload()))
