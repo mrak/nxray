@@ -65,6 +65,7 @@ pub enum Filter {
 #[derive(PartialEq, Debug)]
 pub enum Argument<'a> {
     Version,
+    Emdash,
     Help,
     Pcap,
     Interface(&'a str),
@@ -206,6 +207,7 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Box<Error<Rule>>> {
                 parse_address(second)?,
             ))
         }
+        Rule::emdash => Argument::Emdash,
         Rule::interface => Argument::Interface(arg.as_str()),
         _ => unreachable!(),
     });

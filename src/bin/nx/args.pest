@@ -26,6 +26,7 @@ ipv6_no_port = _{ ("[" ~  ipv6_ip ~ "]") | (ipv6_ip ~ mask?) }
 ipv6_address = ${ ipv6_with_port | ipv6_no_port }
 mac_address = @{ (ASCII_HEX_DIGIT{2} ~ ":"){5} ~ ASCII_HEX_DIGIT{2} }
 interface = @{ (ASCII_ALPHANUMERIC | "-")+ }
+emdash = { "--" }
 argument = { SOI ~ (pcap
   | version
   | help
@@ -34,5 +35,6 @@ argument = { SOI ~ (pcap
   | packet_anchored
   | address
   | anchor_address
+  | emdash
   | interface
   ) ~ EOI }

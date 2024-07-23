@@ -48,18 +48,41 @@ fn version() {
 
 fn usage() {
     version();
-    println!("Usage: nx [tcp] [udp] [icmp] [arp] [pcap]");
-    println!("          [filter-expression...]");
-    println!("          [interface...]");
+    println!("Usage: nx [OPTION..] [FILTER_EXPRESSION..] [--] [INTERFACE_NAME..]");
+    println!("");
+    println!("OPTIONS");
+    println!("");
+    println!("tcp                    show only TCP packets");
+    println!("udp                    show only UDP packets");
+    println!("icmp                   show only ICMP packets");
+    println!("arp                    show only ARP packets");
+    println!("pcap                   output in pcap format");
+    println!("");
+    println!("FILTER_EXPRESSIONS");
+    println!("");
+    println!("MAC Address match      MAC_ADDRESS");
+    println!("Port match             :PORT");
+    println!("Address match          IP_ADDRESS");
+    println!("CIDR                   IP_ADDRESS/MASK");
+    println!("CIDR with port         IP_ADDRESS/MASK:PORT");
+    println!("");
+    println!("any of the above replaces ... below");
+    println!("");
+    println!("Src match              ^...");
+    println!("Dst match              @...");
+    println!("Src AND Dst            @...^...");
+    println!("Src <=> Dst            ...=...");
 }
 
 fn main() {
     let mut s = Settings {
         ..Default::default()
     };
+    let mut args = env::args().skip(1).into_iter();
 
-    for argument in env::args().skip(1) {
+    while let Some(argument) = args.next() {
         match parse_arg(argument.as_str()) {
+            Ok(Argument::Emdash) => break,
             Ok(Argument::Pcap) => s.pcap = true,
             Ok(Argument::Version) => {
                 version();
@@ -80,6 +103,10 @@ fn main() {
                 process::exit(1)
             }
         }
+    }
+
+    while let Some(argument) = args.next() {
+        s.interfaces.push(argument);
     }
 
     if let (false, false, false, false) = (s.tcp, s.udp, s.icmp, s.arp) {
