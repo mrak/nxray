@@ -12,6 +12,8 @@ use pnet::packet::ethernet::EtherTypes;
 use pnet::packet::ethernet::EthernetPacket;
 use pnet::packet::icmp::IcmpPacket;
 use pnet::packet::icmp::IcmpTypes;
+use pnet::packet::icmpv6::Icmpv6Packet;
+use pnet::packet::icmpv6::Icmpv6Types;
 use pnet::packet::ip::IpNextHeaderProtocol;
 use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::Ipv4Packet;
@@ -293,7 +295,7 @@ fn process_transport(
             destination,
             packet,
         ),
-        IpNextHeaderProtocols::Icmp => process_icmp(
+        IpNextHeaderProtocols::Icmpv6 => process_icmpv6(
             settings,
             interface_name,
             source_mac,
@@ -302,7 +304,7 @@ fn process_transport(
             destination,
             packet,
         ),
-        IpNextHeaderProtocols::Icmpv6 => process_icmpv6(
+        IpNextHeaderProtocols::Icmp => process_icmp(
             settings,
             interface_name,
             source_mac,
@@ -536,6 +538,64 @@ fn process_udp(
     }
 }
 
+fn process_icmpv6(
+    settings: &Settings,
+    interface_name: &str,
+    source_mac: &MacAddr,
+    source: &IpAddr,
+    destination_mac: &MacAddr,
+    destination: &IpAddr,
+    packet: &[u8],
+) {
+    if !settings.icmp {
+        return;
+    }
+    if !filters_match_criteria(
+        &settings.filters,
+        source_mac,
+        source,
+        0,
+        destination_mac,
+        destination,
+        0,
+    ) {
+        return;
+    }
+    match Icmpv6Packet::new(packet) {
+        Some(icmp_packet) => {
+            let (i_type, i_desc) = match icmp_packet.get_icmpv6_type() {
+                Icmpv6Types::EchoReply => (String::from("echo"), String::from("reply")),
+                Icmpv6Types::EchoRequest => (String::from("echo"), String::from("request")),
+                Icmpv6Types::RouterAdvert => {
+                    (String::from("router"), String::from("advertisement"))
+                }
+                Icmpv6Types::RouterSolicit => {
+                    (String::from("router"), String::from("solicitation"))
+                }
+                Icmpv6Types::Redirect => (String::from("redirect"), String::from("")),
+                Icmpv6Types::TimeExceeded => (String::from("time exceeded"), String::from("")),
+                Icmpv6Types::DestinationUnreachable => {
+                    (String::from("unreachable"), String::from(""))
+                }
+                _ => (
+                    format!("type {}", icmp_packet.get_icmpv6_type().0),
+                    format!("code {}", icmp_packet.get_icmpv6_code().0),
+                ),
+            };
+            println!(
+                "[{}] {} {} > {} ~ {} {}",
+                interface_name.purple(),
+                "I".bold().red(),
+                source.to_string().green(),
+                destination.to_string().blue(),
+                i_type.yellow(),
+                i_desc.dimmed().white(),
+            );
+        }
+        None => println!("[{}] I Malformed packet", interface_name),
+    }
+}
+
 fn process_icmp(
     settings: &Settings,
     interface_name: &str,
@@ -560,42 +620,36 @@ fn process_icmp(
         return;
     }
     match IcmpPacket::new(packet) {
-        Some(icmp_packet) => match icmp_packet.get_icmp_type() {
-            IcmpTypes::EchoReply => {}
-            _ => println!("[{}] I {} > {}", interface_name, source, destination,),
-        },
-        None => println!("[{}] I Malformed packet", interface_name),
-    }
-}
-
-fn process_icmpv6(
-    settings: &Settings,
-    interface_name: &str,
-    source_mac: &MacAddr,
-    source: &IpAddr,
-    destination_mac: &MacAddr,
-    destination: &IpAddr,
-    packet: &[u8],
-) {
-    if !settings.icmp {
-        return;
-    }
-    if !filters_match_criteria(
-        &settings.filters,
-        source_mac,
-        source,
-        0,
-        destination_mac,
-        destination,
-        0,
-    ) {
-        return;
-    }
-    match IcmpPacket::new(packet) {
-        Some(icmp_packet) => match icmp_packet.get_icmp_type() {
-            IcmpTypes::EchoReply => {}
-            _ => println!("[{}] I {} > {}", interface_name, source, destination,),
-        },
+        Some(icmp_packet) => {
+            let (i_type, i_desc) = match icmp_packet.get_icmp_type() {
+                IcmpTypes::EchoReply => (String::from("echo"), String::from("reply")),
+                IcmpTypes::EchoRequest => (String::from("echo"), String::from("request")),
+                IcmpTypes::RouterAdvertisement => {
+                    (String::from("router"), String::from("advertisement"))
+                }
+                IcmpTypes::RouterSolicitation => {
+                    (String::from("router"), String::from("solicitation"))
+                }
+                IcmpTypes::RedirectMessage => (String::from("redirect"), String::from("message")),
+                IcmpTypes::Traceroute => (String::from("traceroute"), String::from("")),
+                IcmpTypes::DestinationUnreachable => {
+                    (String::from("unreachable"), String::from(""))
+                }
+                _ => (
+                    format!("type {}", icmp_packet.get_icmp_type().0),
+                    format!("code {}", icmp_packet.get_icmp_code().0),
+                ),
+            };
+            println!(
+                "[{}] {} {} > {} ~ {} {}",
+                interface_name.purple(),
+                "I".bold().red(),
+                source.to_string().green(),
+                destination.to_string().blue(),
+                i_type.yellow(),
+                i_desc.dimmed().white(),
+            );
+        }
         None => println!("[{}] I Malformed packet", interface_name),
     }
 }
