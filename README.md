@@ -12,28 +12,34 @@ Notice that any example command preceded by `#` denotes root or privileged
 access to the system. Anywhere `MY.LOCAL.IP.ADDR` is present is replaced with your actual
 machine IP address.
 
-### Show all TCP or UDP packets
+### Show all TCP and UDP packets
 
 ```console
 # nx
 ```
 
+### Show all TCP and UDP packets from a given interface
+
+```console
+# nx eth0
+```
+
+### Show only UDP and ICMP packets
+
+```console
+# nx udp icmp
+```
+
 ### Show any standard DNS request
 
 ```console
-#nx :53
+# nx :53
 ```
 
 ### Show all DNS requests to CloudFlare
 
 ```console
-# nx 1.{1.1,0.0}.1:53
-```
-
-### Show ICMP packets to/from any interface
-
-```console
-# nx icmp
+# nx 1.{1.1,0.0}.1:53 [2606:4700:4700::1{11,00}1]:53
 ```
 
 ### Show any packets to/from private domains
@@ -42,15 +48,15 @@ machine IP address.
 # nx 192.168.0.0/16 172.16.0.0/12 10.0.0.0/8
 ```
 
-### Show all packets between my machine and router
-
-Assuming local network is `192.168.1.0/24`:
+### Show any private network SSH packets
 
 ```console
-# nx MY.LOCAL.IP.ADDR=192.168.1.1
+# nx 192.168.0.0/16:22 172.16.0.0/12:22 10.0.0.0/8:22
 ```
 
 ### Show only packets targeting specific IP:port
+
+The `@` anchor matches the destination fields of packets.
 
 ```console
 # nx @10.1.2.3:1234
@@ -58,9 +64,45 @@ Assuming local network is `192.168.1.0/24`:
 
 ### Show only packets originating from specific IP
 
+The `^` anchor matches the source fields of packets.
+
 ```console
 # nx ^10.1.2.3
 ```
+
+### Show only packets originating from specific IP and targeting a specific IP
+
+`@` and `^` can be used together to match packets matching both their source AND
+destination
+
+```console
+# nx ^10.1.2.3@10.4.5.6
+```
+
+The following, for instance, matches any packets originating from `10.1.2.3` OR
+packets targeting `10.4.5.6`.
+
+```console
+# nx ^10.1.2.3 @10.4.5.6
+```
+
+### Show all packets to/from my machine and router
+
+The `=` infix operator matches packets where the left/right side are the
+src/destination fields OR the destination/src fields.
+
+Assuming local network is `192.168.1.0/24`:
+
+```console
+# nx MY.LOCAL.IP.ADDR=192.168.1.1
+```
+
+This is equivalent to the following:
+
+```console
+# nx ^MY.LOCAL.IP.ADDR@192.168.1.1 @MY.LOCAL.IP.ADDR^192.168.1.1
+```
+
 
 # Development TODO
 
