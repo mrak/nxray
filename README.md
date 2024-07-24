@@ -57,6 +57,12 @@ machine IP address.
 # nx 192.168.0.0/16:22 172.16.0.0/12:22 10.0.0.0/8:22
 ```
 
+### Show packets to/from MAC address
+
+```console
+# nx aa:bb:cc:dd:ee:ff
+```
+
 ### Show only packets targeting specific IP:port
 
 The `@` anchor matches the destination fields of packets.
