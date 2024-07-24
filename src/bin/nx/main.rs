@@ -12,6 +12,7 @@ use pnet::packet::ethernet::EtherTypes;
 use pnet::packet::ethernet::EthernetPacket;
 use pnet::packet::icmp::IcmpPacket;
 use pnet::packet::icmp::IcmpTypes;
+use pnet::packet::icmpv6::ndp::*;
 use pnet::packet::icmpv6::Icmpv6Packet;
 use pnet::packet::icmpv6::Icmpv6Types;
 use pnet::packet::ip::IpNextHeaderProtocol;
@@ -248,17 +249,23 @@ fn process_arp(settings: &Settings, interface_name: &str, packet: &EthernetPacke
                 return;
             }
             println!(
-                "[{}] A {}[{}] > {}[{}] ~ {}",
-                interface_name,
-                packet.get_source(),
-                arp_packet.get_sender_proto_addr(),
-                packet.get_destination(),
-                arp_packet.get_target_proto_addr(),
+                "[{}] {} {}{} > {}{} ~ {}",
+                interface_name.purple(),
+                String::from("A").bold().red(),
+                packet.get_source().to_string().green(),
+                format!("[{}]", arp_packet.get_sender_proto_addr())
+                    .dimmed()
+                    .green(),
+                packet.get_destination().to_string().blue(),
+                format!("[{}]", arp_packet.get_target_proto_addr())
+                    .dimmed()
+                    .blue(),
                 match arp_packet.get_operation() {
                     ArpOperations::Reply => "reply",
                     ArpOperations::Request => "request",
                     _ => "unknown",
-                },
+                }
+                .yellow(),
             )
         }
         None => println!("[{}] A Malformed packet", interface_name),
@@ -563,23 +570,107 @@ fn process_icmpv6(
     }
     match Icmpv6Packet::new(packet) {
         Some(icmp_packet) => {
-            let (i_type, i_desc) = match icmp_packet.get_icmpv6_type() {
-                Icmpv6Types::EchoReply => (String::from("echo"), String::from("reply")),
-                Icmpv6Types::EchoRequest => (String::from("echo"), String::from("request")),
+            let (i_type, i_desc, i_details) = match icmp_packet.get_icmpv6_type() {
+                Icmpv6Types::EchoReply => (String::from("echo"), String::from("reply"), None),
+                Icmpv6Types::EchoRequest => (String::from("echo"), String::from("request"), None),
+                Icmpv6Types::Redirect => {
+                    let rp = RedirectPacket::new(packet);
+                    (
+                        String::from("ndp"),
+                        String::from("redirect"),
+                        rp.map(|r| {
+                            format!(
+                                "{} {}\n{} {}",
+                                "Target:      ".dimmed(),
+                                r.get_target_addr(),
+                                "Destination: ".dimmed(),
+                                r.get_dest_addr(),
+                            )
+                        }),
+                    )
+                }
+                Icmpv6Types::TimeExceeded => {
+                    (String::from("time exceeded"), String::from(""), None)
+                }
+                Icmpv6Types::DestinationUnreachable => (
+                    String::from("unreachable"),
+                    match icmp_packet.get_icmpv6_code().0 {
+                        0 => String::from("no route"),
+                        1 => String::from("prohibited"),
+                        2 => String::from("beyond source scope"),
+                        3 => String::from("address"),
+                        4 => String::from("port"),
+                        5 => String::from("ingress/egress"),
+                        6 => String::from("rejected"),
+                        _ => String::from(""),
+                    },
+                    None,
+                ),
                 Icmpv6Types::RouterAdvert => {
-                    (String::from("router"), String::from("advertisement"))
+                    let ra = RouterAdvertPacket::new(packet);
+                    (
+                        String::from("router"),
+                        String::from("advertisement"),
+                        ra.map(|r| {
+                            format!(
+                                "{} {}\n{} {}\n{} {}\n{} {}\n{} {}\n{} {}",
+                                "Current Hop Limit:       ".dimmed(),
+                                r.get_hop_limit().to_string(),
+                                "Router Lifetime:         ".dimmed(),
+                                format!("{}s", r.get_lifetime()),
+                                "Reachable Time:          ".dimmed(),
+                                format!("{}ms", r.get_reachable_time()),
+                                "Retrans Time:            ".dimmed(),
+                                format!("{}ms", r.get_retrans_time()),
+                                "Managed Address Flag     ".dimmed(),
+                                r.get_flags() & 0b10000000 != 0,
+                                "Other Configuraiton Flag ".dimmed(),
+                                r.get_flags() & 0b11000000 != 0,
+                            )
+                        }),
+                    )
                 }
                 Icmpv6Types::RouterSolicit => {
-                    (String::from("router"), String::from("solicitation"))
+                    (String::from("router"), String::from("solicitation"), None)
                 }
-                Icmpv6Types::Redirect => (String::from("redirect"), String::from("")),
-                Icmpv6Types::TimeExceeded => (String::from("time exceeded"), String::from("")),
-                Icmpv6Types::DestinationUnreachable => {
-                    (String::from("unreachable"), String::from(""))
+                Icmpv6Types::NeighborSolicit => {
+                    let ns = NeighborSolicitPacket::new(packet);
+                    (
+                        String::from("ndp"),
+                        String::from("neighbor solicitation"),
+                        ns.map(|p| {
+                            format!(
+                                "{} {}",
+                                String::from("Target:").dimmed(),
+                                p.get_target_addr(),
+                            )
+                        }),
+                    )
+                }
+                Icmpv6Types::NeighborAdvert => {
+                    let na = NeighborAdvertPacket::new(packet);
+                    (
+                        String::from("ndp"),
+                        String::from("neighbor advertisement"),
+                        na.map(|p| {
+                            format!(
+                                "{} {}\n{} {}\n{} {}\n{} {} ",
+                                String::from("Target:        ").dimmed(),
+                                p.get_target_addr(),
+                                String::from("Router flag:   ").dimmed(),
+                                p.get_flags() & 0b10000000 == 0,
+                                String::from("Solicited flag:").dimmed(),
+                                p.get_flags() & 0b01000000 == 0,
+                                String::from("Override flag: ").dimmed(),
+                                p.get_flags() & 0b01000000 == 0,
+                            )
+                        }),
+                    )
                 }
                 _ => (
                     format!("type {}", icmp_packet.get_icmpv6_type().0),
                     format!("code {}", icmp_packet.get_icmpv6_code().0),
+                    None,
                 ),
             };
             println!(
@@ -591,6 +682,7 @@ fn process_icmpv6(
                 i_type.yellow(),
                 i_desc.dimmed().white(),
             );
+            i_details.map(|d| println!("{}", d));
         }
         None => println!("[{}] I Malformed packet", interface_name),
     }
