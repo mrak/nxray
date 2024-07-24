@@ -573,6 +573,17 @@ fn process_icmpv6(
             let (i_type, i_desc, i_details) = match icmp_packet.get_icmpv6_type() {
                 Icmpv6Types::EchoReply => (String::from("echo"), String::from("reply"), None),
                 Icmpv6Types::EchoRequest => (String::from("echo"), String::from("request"), None),
+                Icmpv6Types::ParameterProblem => {
+                    (String::from("parameter problem"), String::from(""), None)
+                }
+                Icmpv6Types::PacketTooBig => {
+                    let mtu_bytes: [u8; 4] = icmp_packet.payload()[2..6].try_into().unwrap();
+                    (
+                        String::from("packet too big"),
+                        format!("mtu {}", u32::from_be_bytes(mtu_bytes)),
+                        None,
+                    )
+                }
                 Icmpv6Types::Redirect => {
                     let rp = RedirectPacket::new(packet);
                     (
@@ -612,8 +623,40 @@ fn process_icmpv6(
                         String::from("router"),
                         String::from("advertisement"),
                         ra.map(|r| {
+                            fn router_options(ra: &RouterAdvertPacket) -> String {
+                                let mut output = String::from("");
+                                for o in ra.get_options_iter() {
+                                    match o.get_option_type() {
+                                        NdpOptionTypes::MTU => {
+                                            let mtu_bytes: [u8; 4] =
+                                                o.payload()[2..6].try_into().unwrap();
+                                            output = format!(
+                                                "{}\n{} {}",
+                                                output,
+                                                "MTU:                     ".dimmed(),
+                                                u32::from_be_bytes(mtu_bytes),
+                                            );
+                                        }
+                                        NdpOptionTypes::PrefixInformation => {
+                                            let prefix_bytes: [u8; 16] =
+                                                o.payload()[14..30].try_into().unwrap();
+                                            let prefix_addr = IpAddr::from(prefix_bytes);
+                                            let prefix_length = o.payload()[0];
+                                            output = format!(
+                                                "{}\n{} {}/{}",
+                                                output,
+                                                "Prefix:                  ".dimmed(),
+                                                prefix_addr,
+                                                prefix_length
+                                            );
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                output
+                            }
                             format!(
-                                "{} {}\n{} {}\n{} {}\n{} {}\n{} {}\n{} {}",
+                                "{} {}\n{} {}\n{} {}\n{} {}\n{} {}\n{} {}{}",
                                 "Current Hop Limit:       ".dimmed(),
                                 r.get_hop_limit().to_string(),
                                 "Router Lifetime:         ".dimmed(),
@@ -626,6 +669,7 @@ fn process_icmpv6(
                                 r.get_flags() & 0b10000000 != 0,
                                 "Other Configuraiton Flag ".dimmed(),
                                 r.get_flags() & 0b11000000 != 0,
+                                router_options(&r),
                             )
                         }),
                     )
