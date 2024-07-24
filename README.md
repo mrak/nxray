@@ -6,6 +6,9 @@
 Similar to the venerable `tcpdump`, it can additionally filter packet
 information based on L2 to L4[¹](https://en.wikipedia.org/wiki/OSI_model) criteria using a simplified CLI argument syntax.
 
+> [!IMPORTANT]
+> Works with **Linux** and **MacOS**. Windows is not currently supported.
+
 ## Examples
 
 Notice that any example command preceded by `#` denotes root or privileged
@@ -24,10 +27,10 @@ machine IP address.
 # nx eth0
 ```
 
-### Show only UDP and ICMP packets
+### Show only ARP and ICMP packets
 
 ```console
-# nx udp icmp
+# nx arp icmp
 ```
 
 ### Show any standard DNS request
@@ -107,6 +110,6 @@ This is equivalent to the following:
 # Development TODO
 
 - [ ] pcap format
-- [ ] colorized output
+- [x] colorized output
 - [ ] man(1) page
 - [ ] ethernet-frame-only filtering
