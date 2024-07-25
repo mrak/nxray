@@ -584,36 +584,33 @@ fn process_icmpv6(
                         None,
                     )
                 }
-                Icmpv6Types::Redirect => {
-                    let rp = RedirectPacket::new(packet);
-                    (
-                        String::from("ndp"),
-                        String::from("redirect"),
-                        rp.map(|r| {
-                            format!(
-                                "{} {}\n{} {}",
-                                "Target:      ".dimmed(),
-                                r.get_target_addr(),
-                                "Destination: ".dimmed(),
-                                r.get_dest_addr(),
-                            )
-                        }),
-                    )
-                }
+                Icmpv6Types::Redirect => (
+                    String::from("ndp"),
+                    String::from("redirect"),
+                    RedirectPacket::new(packet).map(|r| {
+                        format!(
+                            "{} {}\n{} {}",
+                            "Target:      ".dimmed(),
+                            r.get_target_addr(),
+                            "Destination: ".dimmed(),
+                            r.get_dest_addr(),
+                        )
+                    }),
+                ),
                 Icmpv6Types::TimeExceeded => {
                     (String::from("time exceeded"), String::from(""), None)
                 }
                 Icmpv6Types::DestinationUnreachable => (
                     String::from("unreachable"),
                     match icmp_packet.get_icmpv6_code().0 {
-                        0 => String::from("no route"),
+                        0 => String::from("route"),
                         1 => String::from("prohibited"),
-                        2 => String::from("beyond source scope"),
+                        2 => String::from("scope"),
                         3 => String::from("address"),
                         4 => String::from("port"),
                         5 => String::from("ingress/egress"),
                         6 => String::from("rejected"),
-                        _ => String::from(""),
+                        x => format!("code {}", x),
                     },
                     None,
                 ),
@@ -718,13 +715,14 @@ fn process_icmpv6(
                 ),
             };
             println!(
-                "[{}] {} {} > {} ~ {} {}",
+                "[{}] {} {} > {} ~ {} {} {}",
                 interface_name.purple(),
                 "I".bold().red(),
                 source.to_string().green(),
                 destination.to_string().blue(),
                 i_type.yellow(),
                 i_desc.dimmed().white(),
+                format!("{}b", icmp_packet.payload().len()).cyan(),
             );
             i_details.map(|d| println!("{}", d));
         }
@@ -757,34 +755,96 @@ fn process_icmp(
     }
     match IcmpPacket::new(packet) {
         Some(icmp_packet) => {
-            let (i_type, i_desc) = match icmp_packet.get_icmp_type() {
-                IcmpTypes::EchoReply => (String::from("echo"), String::from("reply")),
-                IcmpTypes::EchoRequest => (String::from("echo"), String::from("request")),
+            let (i_type, i_desc, i_details) = match icmp_packet.get_icmp_type() {
+                IcmpTypes::EchoReply => (String::from("echo"), String::from("reply"), None),
+                IcmpTypes::EchoRequest => (String::from("echo"), String::from("request"), None),
                 IcmpTypes::RouterAdvertisement => {
-                    (String::from("router"), String::from("advertisement"))
+                    (String::from("router"), String::from("advertisement"), None)
                 }
                 IcmpTypes::RouterSolicitation => {
-                    (String::from("router"), String::from("solicitation"))
+                    (String::from("router"), String::from("solicitation"), None)
                 }
-                IcmpTypes::RedirectMessage => (String::from("redirect"), String::from("message")),
-                IcmpTypes::Traceroute => (String::from("traceroute"), String::from("")),
-                IcmpTypes::DestinationUnreachable => {
-                    (String::from("unreachable"), String::from(""))
+                IcmpTypes::ParameterProblem => (
+                    String::from("parameter problem"),
+                    match icmp_packet.get_icmp_code().0 {
+                        0 => String::from("pointer"),
+                        1 => String::from("missing option"),
+                        2 => String::from("bad length"),
+                        x => format!("code {}", x),
+                    },
+                    None,
+                ),
+                IcmpTypes::Timestamp => (String::from("timestamp"), String::from("request"), None),
+                IcmpTypes::TimestampReply => {
+                    (String::from("timestamp"), String::from("reply"), None)
                 }
+
+                IcmpTypes::RedirectMessage => (
+                    String::from("redirect"),
+                    match icmp_packet.get_icmp_code().0 {
+                        0 => String::from("network"),
+                        1 => String::from("host"),
+                        2 => String::from("tos network"),
+                        3 => String::from("tos host"),
+                        x => format!("code {}", x),
+                    },
+                    {
+                        let ip_bytes: [u8; 4] = icmp_packet.payload()[4..8].try_into().unwrap();
+                        Some(IpAddr::from(ip_bytes).to_string())
+                    },
+                ),
+                IcmpTypes::AddressMaskRequest => {
+                    (String::from("address mask"), String::from("request"), None)
+                }
+                IcmpTypes::AddressMaskReply => {
+                    (String::from("address mask"), String::from("reply"), None)
+                }
+                IcmpTypes::InformationRequest => {
+                    (String::from("information"), String::from("request"), None)
+                }
+                IcmpTypes::InformationReply => {
+                    (String::from("information"), String::from("reply"), None)
+                }
+                IcmpTypes::Traceroute => (
+                    String::from("traceroute"),
+                    String::from("(deprecated)"),
+                    None,
+                ),
+                IcmpTypes::DestinationUnreachable => (
+                    String::from("unreachable"),
+                    match icmp_packet.get_icmp_code().0 {
+                        0 => String::from("network"),
+                        1 => String::from("host"),
+                        2 => String::from("protocol"),
+                        3 => String::from("port"),
+                        4 => String::from("fragmentation needed"),
+                        5 => String::from("source route failed"),
+                        x => format!("{}", x),
+                    },
+                    None,
+                ),
+                IcmpTypes::SourceQuench => (
+                    String::from("source quench"),
+                    String::from("(deprecated)"),
+                    None,
+                ),
                 _ => (
                     format!("type {}", icmp_packet.get_icmp_type().0),
                     format!("code {}", icmp_packet.get_icmp_code().0),
+                    None,
                 ),
             };
             println!(
-                "[{}] {} {} > {} ~ {} {}",
+                "[{}] {} {} > {} ~ {} {} {}",
                 interface_name.purple(),
                 "I".bold().red(),
                 source.to_string().green(),
                 destination.to_string().blue(),
                 i_type.yellow(),
                 i_desc.dimmed().white(),
+                format!("{}b", icmp_packet.payload().len()).cyan(),
             );
+            i_details.map(|d| println!("{}", d));
         }
         None => println!("[{}] I Malformed packet", interface_name),
     }
