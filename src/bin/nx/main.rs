@@ -573,9 +573,16 @@ fn process_icmpv6(
             let (i_type, i_desc, i_details) = match icmp_packet.get_icmpv6_type() {
                 Icmpv6Types::EchoReply => (String::from("echo"), String::from("reply"), None),
                 Icmpv6Types::EchoRequest => (String::from("echo"), String::from("request"), None),
-                Icmpv6Types::ParameterProblem => {
-                    (String::from("parameter problem"), String::from(""), None)
-                }
+                Icmpv6Types::ParameterProblem => (
+                    String::from("parameter problem"),
+                    match icmp_packet.get_icmpv6_code().0 {
+                        0 => String::from("erroneous header"),
+                        1 => String::from("next header"),
+                        2 => String::from("option"),
+                        x => format!("code {}", x),
+                    },
+                    None,
+                ),
                 Icmpv6Types::PacketTooBig => {
                     let mtu_bytes: [u8; 4] = icmp_packet.payload()[2..6].try_into().unwrap();
                     (
