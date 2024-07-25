@@ -116,8 +116,8 @@ fn main() {
     if let (false, false, false, false) = (s.tcp, s.udp, s.icmp, s.arp) {
         s.tcp = true;
         s.udp = true;
-        s.icmp = false;
-        s.arp = false;
+        s.icmp = true;
+        s.arp = true;
     }
 
     let (snd, rcv) = mpsc::channel();
