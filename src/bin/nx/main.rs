@@ -23,6 +23,7 @@ use pnet::packet::tcp::TcpFlags;
 use pnet::packet::tcp::TcpPacket;
 use pnet::packet::udp::UdpPacket;
 use pnet::packet::Packet;
+use std::collections::HashMap;
 use std::env;
 use std::io::ErrorKind;
 use std::net::IpAddr;
@@ -137,11 +138,10 @@ fn capture_packets(settings: &Settings, sender: Sender<(u32, Vec<u8>)>) {
                 .collect()
         }
     };
-    let mut children = Vec::new();
 
     for interface in interfaces {
         let child_snd = sender.clone();
-        let child = thread::spawn(move || {
+        thread::spawn(move || {
             let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
                 Ok(Ethernet(tx, rx)) => (tx, rx),
                 Ok(_) => panic!("nx: unhandled channel type"),
@@ -165,28 +165,26 @@ fn capture_packets(settings: &Settings, sender: Sender<(u32, Vec<u8>)>) {
                 };
             }
         });
-        children.push(child);
     }
 }
 
 fn print_packets(settings: &Settings, receiver: Receiver<(u32, Vec<u8>)>) {
-    let interfaces = datalink::interfaces();
+    let inames: HashMap<u32, String> = datalink::interfaces()
+        .iter()
+        .map(|x| (x.index, x.name.clone()))
+        .collect();
     loop {
         match receiver.recv() {
-            Ok((interface_index, packet)) => {
-                // OS interface indexes are 1 based, but Vectors are 0 based
-                let index = (interface_index as usize) - 1;
+            Ok((index, packet)) => {
                 let ethernet_packet = EthernetPacket::new(packet.as_slice()).unwrap();
                 match ethernet_packet.get_ethertype() {
                     EtherTypes::Ipv4 => {
-                        process_ipv4(settings, &interfaces[index].name[..], &ethernet_packet)
+                        process_ipv4(settings, &inames[&index][..], &ethernet_packet)
                     }
                     EtherTypes::Ipv6 => {
-                        process_ipv6(settings, &interfaces[index].name[..], &ethernet_packet)
+                        process_ipv6(settings, &inames[&index][..], &ethernet_packet)
                     }
-                    EtherTypes::Arp => {
-                        process_arp(settings, &interfaces[index].name[..], &ethernet_packet)
-                    }
+                    EtherTypes::Arp => process_arp(settings, &inames[&index][..], &ethernet_packet),
                     _ => {}
                 }
             }
