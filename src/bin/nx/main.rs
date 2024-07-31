@@ -2,10 +2,10 @@ mod args;
 
 use args::*;
 use colored::Colorize;
-use pnet::datalink;
-use pnet::datalink::Channel::Ethernet;
+use pcap::Capture;
+use pcap::Device;
+use pcap::Linktype;
 use pnet::datalink::MacAddr;
-use pnet::datalink::NetworkInterface;
 use pnet::packet::arp::ArpOperations;
 use pnet::packet::arp::ArpPacket;
 use pnet::packet::ethernet::EtherTypes;
@@ -24,7 +24,6 @@ use pnet::packet::tcp::TcpPacket;
 use pnet::packet::udp::UdpPacket;
 use pnet::packet::Packet;
 use std::env;
-use std::io::ErrorKind;
 use std::net::IpAddr;
 use std::process;
 use std::sync::mpsc;
@@ -53,25 +52,25 @@ fn version() {
 fn usage() {
     version();
     println!("Usage: nx [OPTION..] [FILTER_EXPRESSION..] [--] [INTERFACE_NAME..]");
-    println!("");
+    println!();
     println!("OPTIONS");
-    println!("");
+    println!();
     println!("tcp                    show only TCP packets");
     println!("udp                    show only UDP packets");
     println!("icmp                   show only ICMP packets");
     println!("arp                    show only ARP packets");
     println!("pcap                   output in pcap format");
-    println!("");
+    println!();
     println!("FILTER_EXPRESSIONS");
-    println!("");
+    println!();
     println!("MAC Address match      MAC_ADDRESS");
     println!("Port match             :PORT");
     println!("Address match          IP_ADDRESS");
     println!("CIDR                   IP_ADDRESS/MASK");
     println!("CIDR with port         IP_ADDRESS/MASK:PORT");
-    println!("");
+    println!();
     println!("any of the above replaces ... below");
-    println!("");
+    println!();
     println!("Src match              ^...");
     println!("Dst match              @...");
     println!("Src AND Dst            @...^...");
@@ -82,9 +81,9 @@ fn main() {
     let mut s = Settings {
         ..Default::default()
     };
-    let mut args = env::args().skip(1).into_iter();
+    let mut args = env::args().skip(1);
 
-    while let Some(argument) = args.next() {
+    for argument in args.by_ref() {
         match parse_arg(argument.as_str()) {
             Ok(Argument::Emdash) => break,
             Ok(Argument::Pcap) => s.pcap = true,
@@ -109,7 +108,7 @@ fn main() {
         }
     }
 
-    while let Some(argument) = args.next() {
+    for argument in args.by_ref() {
         s.interfaces.push(argument);
     }
 
@@ -126,67 +125,61 @@ fn main() {
     print_packets(&s, rcv);
 }
 
-fn capture_packets(settings: &Settings, sender: Sender<(u32, Vec<u8>)>) {
-    let interfaces = match &settings.interfaces {
-        x if x.is_empty() => datalink::interfaces(),
+fn capture_packets(settings: &Settings, sender: Sender<(String, Vec<u8>)>) {
+    let interfaces: Vec<Device> = match &settings.interfaces {
+        x if x.is_empty() => Device::list().unwrap(),
         x => {
-            let interface_name_matcher = |interface: &NetworkInterface| x.contains(&interface.name);
-            datalink::interfaces()
+            let interface_name_matcher = |interface: &Device| x.contains(&interface.name);
+            Device::list()
+                .unwrap()
                 .into_iter()
                 .filter(interface_name_matcher)
                 .collect()
         }
-    };
+    }
+    .into_iter()
+    .filter(|d: &Device| d.flags.is_up() && d.flags.is_running())
+    .collect();
     let mut children = Vec::new();
 
     for interface in interfaces {
         let child_snd = sender.clone();
         let child = thread::spawn(move || {
-            let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
-                Ok(Ethernet(tx, rx)) => (tx, rx),
-                Ok(_) => panic!("nx: unhandled channel type"),
-                Err(e) => match e.kind() {
-                    ErrorKind::PermissionDenied => {
-                        eprintln!(
-                            "nx: Permission Denied - Unable to open interface {}",
-                            interface.name
-                        );
-                        process::exit(1)
-                    }
-                    _ => panic!("nx: unable to create channel: {}", e),
-                },
-            };
-            loop {
-                match rx.next() {
-                    Ok(packet) => child_snd
-                        .send((interface.index, packet.to_owned()))
-                        .unwrap(),
-                    Err(e) => panic!("nx: Unable to receive packet: {}", e),
-                };
+            let iname = interface.name.clone();
+            let capture = Capture::from_device(interface).unwrap();
+            let mut rx = capture.open().unwrap();
+            if let Ok(links) = rx.list_datalinks() {
+                if !links.contains(&Linktype::ETHERNET) {
+                    return;
+                }
+            } else {
+                return;
+            }
+            if let Err(_) = rx.set_datalink(Linktype::ETHERNET) {
+                return;
+            }
+            while let Ok(packet) = rx.next_packet() {
+                child_snd
+                    .send((iname.to_owned(), packet.data.to_owned()))
+                    .unwrap();
             }
         });
         children.push(child);
     }
 }
 
-fn print_packets(settings: &Settings, receiver: Receiver<(u32, Vec<u8>)>) {
-    let interfaces = datalink::interfaces();
+fn print_packets(settings: &Settings, receiver: Receiver<(String, Vec<u8>)>) {
     loop {
         match receiver.recv() {
-            Ok((interface_index, packet)) => {
-                // OS interface indexes are 1 based, but Vectors are 0 based
-                let index = (interface_index as usize) - 1;
-                let ethernet_packet = EthernetPacket::new(packet.as_slice()).unwrap();
+            Ok((interface_name, packet)) => {
+                let ethernet_packet = match EthernetPacket::new(packet.as_slice()) {
+                    Some(e) => e,
+                    None => continue,
+                };
                 match ethernet_packet.get_ethertype() {
-                    EtherTypes::Ipv4 => {
-                        process_ipv4(settings, &interfaces[index].name[..], &ethernet_packet)
-                    }
-                    EtherTypes::Ipv6 => {
-                        process_ipv6(settings, &interfaces[index].name[..], &ethernet_packet)
-                    }
-                    EtherTypes::Arp => {
-                        process_arp(settings, &interfaces[index].name[..], &ethernet_packet)
-                    }
+                    EtherTypes::Ipv4 => process_ipv4(settings, &interface_name, &ethernet_packet),
+                    EtherTypes::Ipv6 => process_ipv6(settings, &interface_name, &ethernet_packet),
+                    EtherTypes::Arp => process_arp(settings, &interface_name, &ethernet_packet),
                     _ => {}
                 }
             }
@@ -660,15 +653,15 @@ fn process_icmpv6(
                                 output
                             }
                             format!(
-                                "{} {}\n{} {}\n{} {}\n{} {}\n{} {}\n{} {}{}",
+                                "{} {}\n{} {}s\n{} {}ms\n{} {}ms\n{} {}\n{} {}{}",
                                 "Current Hop Limit:       ".dimmed(),
-                                r.get_hop_limit().to_string(),
+                                r.get_hop_limit(),
                                 "Router Lifetime:         ".dimmed(),
-                                format!("{}s", r.get_lifetime()),
+                                r.get_lifetime(),
                                 "Reachable Time:          ".dimmed(),
-                                format!("{}ms", r.get_reachable_time()),
+                                r.get_reachable_time(),
                                 "Retrans Time:            ".dimmed(),
-                                format!("{}ms", r.get_retrans_time()),
+                                r.get_retrans_time(),
                                 "Managed Address Flag     ".dimmed(),
                                 r.get_flags() & 0b10000000 != 0,
                                 "Other Configuraiton Flag ".dimmed(),
@@ -731,7 +724,9 @@ fn process_icmpv6(
                 i_desc.dimmed().white(),
                 format!("{}b", icmp_packet.payload().len()).cyan(),
             );
-            i_details.map(|d| println!("{}", d));
+            if let Some(d) = i_details {
+                println!("{}", d)
+            };
         }
         None => println!("[{}] I Malformed packet", interface_name),
     }
@@ -851,7 +846,9 @@ fn process_icmp(
                 i_desc.dimmed().white(),
                 format!("{}b", icmp_packet.payload().len()).cyan(),
             );
-            i_details.map(|d| println!("{}", d));
+            if let Some(d) = i_details {
+                println!("{}", d)
+            }
         }
         None => println!("[{}] I Malformed packet", interface_name),
     }
