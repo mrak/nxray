@@ -323,17 +323,32 @@ fn process_transport(
 }
 
 fn tcp_type_from_flags(flags: u8) -> String {
-    if (flags & TcpFlags::RST) != 0 {
-        String::from("RST")
-    } else if (flags & TcpFlags::FIN) != 0 {
-        String::from("FIN")
-    } else if (flags & TcpFlags::SYN) != 0 {
-        String::from("SYN")
-    } else if (flags & TcpFlags::ACK) != 0 {
-        String::from("ACK")
-    } else {
-        String::from("???")
+    let mut fs: Vec<String> = vec![];
+    if (flags & TcpFlags::CWR) != 0 {
+        fs.push(String::from("CWR"));
     }
+    if (flags & TcpFlags::ECE) != 0 {
+        fs.push(String::from("ECE"));
+    }
+    if (flags & TcpFlags::URG) != 0 {
+        fs.push(String::from("URG"));
+    }
+    if (flags & TcpFlags::ACK) != 0 {
+        fs.push(String::from("ACK"));
+    }
+    if (flags & TcpFlags::PSH) != 0 {
+        fs.push(String::from("PSH"));
+    }
+    if (flags & TcpFlags::RST) != 0 {
+        fs.push(String::from("RST"));
+    }
+    if (flags & TcpFlags::SYN) != 0 {
+        fs.push(String::from("SYN"));
+    }
+    if (flags & TcpFlags::FIN) != 0 {
+        fs.push(String::from("FIN"));
+    }
+    fs.join(" ")
 }
 
 fn escape_payload(payload: &[u8]) -> String {
@@ -486,9 +501,7 @@ fn process_tcp(
                 format!(":{}", tcp_packet.get_source()).dimmed().green(),
                 destination.to_string().blue(),
                 format!(":{}", tcp_packet.get_destination()).dimmed().blue(),
-                tcp_type_from_flags(tcp_packet.get_flags())
-                    .to_string()
-                    .yellow(),
+                tcp_type_from_flags(tcp_packet.get_flags()).yellow(),
                 format!("#{}", tcp_packet.get_sequence()).dimmed().white(),
                 format!("{}b", tcp_packet.payload().len()).cyan(),
             );
