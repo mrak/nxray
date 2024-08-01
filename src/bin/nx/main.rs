@@ -39,6 +39,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(Default, Debug)]
 struct Settings {
     pcap: bool,
+    short: bool,
     tcp: bool,
     udp: bool,
     icmp: bool,
@@ -89,6 +90,7 @@ fn main() {
         match parse_arg(argument.as_str()) {
             Ok(Argument::Emdash) => break,
             Ok(Argument::Pcap) => s.pcap = true,
+            Ok(Argument::Short) => s.short = true,
             Ok(Argument::Version) => {
                 version();
                 process::exit(0)
@@ -505,7 +507,7 @@ fn process_tcp(
                 format!("#{}", tcp_packet.get_sequence()).dimmed().white(),
                 format!("{}b", tcp_packet.payload().len()).cyan(),
             );
-            if !tcp_packet.payload().is_empty() {
+            if !settings.short && !tcp_packet.payload().is_empty() {
                 println!("{}", escape_payload(tcp_packet.payload()))
             }
         }
@@ -548,7 +550,7 @@ fn process_udp(
                 format!(":{}", udp_packet.get_destination()).dimmed().blue(),
                 format!("{}b", udp_packet.get_length()).cyan(),
             );
-            if !udp_packet.payload().is_empty() {
+            if !settings.short && !udp_packet.payload().is_empty() {
                 println!("{}", escape_payload(udp_packet.payload()))
             }
         }
@@ -742,8 +744,10 @@ fn process_icmpv6(
                 i_desc.dimmed().white(),
                 format!("{}b", icmp_packet.payload().len()).cyan(),
             );
-            if let Some(d) = i_details {
-                println!("{}", d)
+            if !settings.short {
+                if let Some(d) = i_details {
+                    println!("{}", d)
+                }
             }
         }
         None => println!("[{}] I Malformed packet", interface_name),
@@ -864,8 +868,10 @@ fn process_icmp(
                 i_desc.dimmed().white(),
                 format!("{}b", icmp_packet.payload().len()).cyan(),
             );
-            if let Some(d) = i_details {
-                println!("{}", d)
+            if !settings.short {
+                if let Some(d) = i_details {
+                    println!("{}", d)
+                }
             }
         }
         None => println!("[{}] I Malformed packet", interface_name),

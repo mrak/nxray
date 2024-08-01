@@ -118,4 +118,4 @@ This is equivalent to the following:
 - [ ] pcap format
 - [x] colorized output
 - [ ] man(1) page
-- [ ] ethernet-frame-only filtering
+- [x] ethernet-frame-only filtering

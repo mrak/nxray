@@ -66,6 +66,7 @@ pub enum Filter {
 pub enum Argument<'a> {
     Version,
     Emdash,
+    Short,
     Help,
     Pcap,
     Interface(&'a str),
@@ -179,6 +180,7 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Box<Error<Rule>>> {
 
     return Ok(match arg.as_rule() {
         Rule::pcap => Argument::Pcap,
+        Rule::short => Argument::Short,
         Rule::version => Argument::Version,
         Rule::help => Argument::Help,
         Rule::protocol => Argument::ProtocolFlag(Protocol::from_str(arg.as_str()).unwrap()),

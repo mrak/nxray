@@ -1,6 +1,7 @@
 protocol = { "tcp" | "udp" | "icmp" | "arp" }
 help = @{ "-"{0,2} ~ "help" | "-h" }
 version = @{ "-"{0,2} ~ "version" | "-v" }
+short = { "short" }
 pcap = { "pcap" }
 destination = @{ "@" }
 source = @{ "^" }
@@ -35,6 +36,7 @@ argument = { SOI ~ (pcap
   | packet_anchored
   | address
   | anchor_address
+  | short
   | emdash
   | interface
   ) ~ EOI }
