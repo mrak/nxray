@@ -251,7 +251,7 @@ fn process_arp(settings: &Settings, interface_name: &str, packet: &EthernetPacke
             println!(
                 "[{}] {} {}{} > {}{} ~ {}",
                 interface_name.purple(),
-                String::from("A").bold().red(),
+                "ARP".bold().red(),
                 packet.get_source().to_string().green(),
                 format!("[{}]", arp_packet.get_sender_proto_addr())
                     .dimmed()
@@ -498,7 +498,7 @@ fn process_tcp(
             println!(
                 "[{}] {} {}{} > {}{} ~ {} {} {}",
                 interface_name.purple(),
-                "T".red().bold(),
+                "TCP".red().bold(),
                 source.to_string().green(),
                 format!(":{}", tcp_packet.get_source()).dimmed().green(),
                 destination.to_string().blue(),
@@ -543,7 +543,7 @@ fn process_udp(
             println!(
                 "[{}] {} {}{} > {}{} ~ {}",
                 interface_name.purple(),
-                "U".red().bold(),
+                "UDP".red().bold(),
                 source.to_string().green(),
                 format!(":{}", udp_packet.get_source()).dimmed().green(),
                 destination.to_string().blue(),
@@ -737,7 +737,7 @@ fn process_icmpv6(
             println!(
                 "[{}] {} {} > {} ~ {} {} {}",
                 interface_name.purple(),
-                "I".bold().red(),
+                "ICMP".bold().red(),
                 source.to_string().green(),
                 destination.to_string().blue(),
                 i_type.yellow(),
