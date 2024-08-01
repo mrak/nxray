@@ -119,3 +119,6 @@ This is equivalent to the following:
 - [x] colorized output
 - [ ] man(1) page
 - [x] ethernet-frame-only filtering
+- [ ] GRE
+- [ ] MPLS (EtherType)
+- [ ] Geneve
