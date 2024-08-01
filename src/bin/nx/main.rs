@@ -54,25 +54,25 @@ fn version() {
 fn usage() {
     version();
     println!("Usage: nx [OPTION..] [FILTER_EXPRESSION..] [--] [INTERFACE_NAME..]");
-    println!("");
+    println!();
     println!("OPTIONS");
-    println!("");
+    println!();
     println!("tcp                    show only TCP packets");
     println!("udp                    show only UDP packets");
     println!("icmp                   show only ICMP packets");
     println!("arp                    show only ARP packets");
     println!("pcap                   output in pcap format");
-    println!("");
+    println!();
     println!("FILTER_EXPRESSIONS");
-    println!("");
+    println!();
     println!("MAC Address match      MAC_ADDRESS");
     println!("Port match             :PORT");
     println!("Address match          IP_ADDRESS");
     println!("CIDR                   IP_ADDRESS/MASK");
     println!("CIDR with port         IP_ADDRESS/MASK:PORT");
-    println!("");
+    println!();
     println!("any of the above replaces ... below");
-    println!("");
+    println!();
     println!("Src match              ^...");
     println!("Dst match              @...");
     println!("Src AND Dst            @...^...");
@@ -83,9 +83,9 @@ fn main() {
     let mut s = Settings {
         ..Default::default()
     };
-    let mut args = env::args().skip(1).into_iter();
+    let mut args = env::args().skip(1);
 
-    while let Some(argument) = args.next() {
+    for argument in args.by_ref() {
         match parse_arg(argument.as_str()) {
             Ok(Argument::Emdash) => break,
             Ok(Argument::Pcap) => s.pcap = true,
@@ -110,7 +110,7 @@ fn main() {
         }
     }
 
-    while let Some(argument) = args.next() {
+    for argument in args {
         s.interfaces.push(argument);
     }
 
@@ -658,15 +658,15 @@ fn process_icmpv6(
                                 output
                             }
                             format!(
-                                "{} {}\n{} {}\n{} {}\n{} {}\n{} {}\n{} {}{}",
+                                "{} {}\n{} {}s\n{} {}ms\n{} {}ms\n{} {}\n{} {}{}",
                                 "Current Hop Limit:       ".dimmed(),
-                                r.get_hop_limit().to_string(),
+                                r.get_hop_limit(),
                                 "Router Lifetime:         ".dimmed(),
-                                format!("{}s", r.get_lifetime()),
+                                r.get_lifetime(),
                                 "Reachable Time:          ".dimmed(),
-                                format!("{}ms", r.get_reachable_time()),
+                                r.get_reachable_time(),
                                 "Retrans Time:            ".dimmed(),
-                                format!("{}ms", r.get_retrans_time()),
+                                r.get_retrans_time(),
                                 "Managed Address Flag     ".dimmed(),
                                 r.get_flags() & 0b10000000 != 0,
                                 "Other Configuraiton Flag ".dimmed(),
@@ -729,7 +729,9 @@ fn process_icmpv6(
                 i_desc.dimmed().white(),
                 format!("{}b", icmp_packet.payload().len()).cyan(),
             );
-            i_details.map(|d| println!("{}", d));
+            if let Some(d) = i_details {
+                println!("{}", d)
+            }
         }
         None => println!("[{}] I Malformed packet", interface_name),
     }
@@ -849,7 +851,9 @@ fn process_icmp(
                 i_desc.dimmed().white(),
                 format!("{}b", icmp_packet.payload().len()).cyan(),
             );
-            i_details.map(|d| println!("{}", d));
+            if let Some(d) = i_details {
+                println!("{}", d)
+            }
         }
         None => println!("[{}] I Malformed packet", interface_name),
     }
