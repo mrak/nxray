@@ -1,4 +1,4 @@
-protocol = { "tcp" | "udp" | "icmp" | "arp" }
+protocol = { "tcp" | "udp" | "icmp" | "arp" | "ipip" }
 help = @{ "-"{0,2} ~ "help" | "-h" }
 version = @{ "-"{0,2} ~ "version" | "-v" }
 short = { "short" }

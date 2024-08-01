@@ -41,6 +41,7 @@ pub enum Protocol {
     Udp,
     Icmp,
     Arp,
+    IpIp,
 }
 
 impl FromStr for Protocol {
@@ -51,6 +52,7 @@ impl FromStr for Protocol {
             "udp" => Ok(Protocol::Udp),
             "icmp" => Ok(Protocol::Icmp),
             "arp" => Ok(Protocol::Arp),
+            "ipip" => Ok(Protocol::IpIp),
             _ => Err(()),
         }
     }
@@ -236,6 +238,8 @@ mod tests {
         assert_eq!(result.unwrap(), Argument::ProtocolFlag(Protocol::Icmp));
         let result = parse_arg("arp");
         assert_eq!(result.unwrap(), Argument::ProtocolFlag(Protocol::Arp));
+        let result = parse_arg("ipip");
+        assert_eq!(result.unwrap(), Argument::ProtocolFlag(Protocol::IpIp));
     }
 
     #[test]

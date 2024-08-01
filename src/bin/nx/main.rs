@@ -44,6 +44,7 @@ struct Settings {
     udp: bool,
     icmp: bool,
     arp: bool,
+    ipip: bool,
     interfaces: Vec<String>,
     filters: Vec<Filter>,
 }
@@ -103,6 +104,7 @@ fn main() {
             Ok(Argument::ProtocolFlag(Protocol::Udp)) => s.udp = true,
             Ok(Argument::ProtocolFlag(Protocol::Icmp)) => s.icmp = true,
             Ok(Argument::ProtocolFlag(Protocol::Arp)) => s.arp = true,
+            Ok(Argument::ProtocolFlag(Protocol::IpIp)) => s.ipip = true,
             Ok(Argument::Interface(i)) => s.interfaces.push(i.to_string()),
             Ok(Argument::FilterExpr(f)) => s.filters.push(f),
             Err(e) => {
@@ -116,11 +118,12 @@ fn main() {
         s.interfaces.push(argument);
     }
 
-    if let (false, false, false, false) = (s.tcp, s.udp, s.icmp, s.arp) {
+    if let (false, false, false, false, false) = (s.tcp, s.udp, s.icmp, s.arp, s.ipip) {
         s.tcp = true;
         s.udp = true;
         s.icmp = true;
         s.arp = true;
+        s.ipip = true;
     }
 
     let (snd, rcv) = mpsc::channel();
@@ -209,7 +212,7 @@ fn process_ipv4(settings: &Settings, interface_name: &str, packet: &EthernetPack
                 ipv4_packet.payload(),
             );
         }
-        None => println!("[{}] Malformed IPv4 packet", interface_name),
+        None => println!("[{}] Ipv4 Malformed packet", interface_name),
     }
 }
 
@@ -227,7 +230,7 @@ fn process_ipv6(settings: &Settings, interface_name: &str, packet: &EthernetPack
                 ipv6_packet.payload(),
             );
         }
-        None => println!("[{}] Malformed IPv6 packet", interface_name),
+        None => println!("[{}] IPv6 Malformed packet", interface_name),
     }
 }
 
@@ -268,7 +271,7 @@ fn process_arp(settings: &Settings, interface_name: &str, packet: &EthernetPacke
                 .yellow(),
             )
         }
-        None => println!("[{}] A Malformed packet", interface_name),
+        None => println!("[{}] ARP Malformed packet", interface_name),
     }
 }
 
@@ -312,6 +315,15 @@ fn process_transport(
             packet,
         ),
         IpNextHeaderProtocols::Icmp => process_icmp(
+            settings,
+            interface_name,
+            source_mac,
+            source,
+            destination_mac,
+            destination,
+            packet,
+        ),
+        IpNextHeaderProtocols::IpIp => process_ipip(
             settings,
             interface_name,
             source_mac,
@@ -470,6 +482,57 @@ fn filters_match_criteria(
     false
 }
 
+fn process_ipip(
+    settings: &Settings,
+    interface_name: &str,
+    source_mac: &MacAddr,
+    source: &IpAddr,
+    destination_mac: &MacAddr,
+    destination: &IpAddr,
+    packet: &[u8],
+) {
+    if !settings.ipip {
+        return;
+    }
+    match Ipv4Packet::new(packet) {
+        Some(ip_packet) => {
+            if !filters_match_criteria(
+                &settings.filters,
+                source_mac,
+                source,
+                0,
+                destination_mac,
+                destination,
+                0,
+            ) {
+                return;
+            }
+            if !filters_match_criteria(
+                &settings.filters,
+                source_mac,
+                &IpAddr::V4(ip_packet.get_source()),
+                0,
+                destination_mac,
+                &IpAddr::V4(ip_packet.get_destination()),
+                0,
+            ) {
+                return;
+            }
+            println!(
+                "[{}] {} {}{} > {}{} ~ {}",
+                interface_name.purple(),
+                "IPIP".red().bold(),
+                source.to_string().green(),
+                format!("[{}]", ip_packet.get_source()).dimmed().green(),
+                destination.to_string().blue(),
+                format!("[{}]", ip_packet.get_destination()).dimmed().blue(),
+                format!("{}b", ip_packet.payload().len()).cyan(),
+            );
+        }
+        None => println!("[{}] IPIP Malformed packet", interface_name),
+    }
+}
+
 fn process_tcp(
     settings: &Settings,
     interface_name: &str,
@@ -511,7 +574,7 @@ fn process_tcp(
                 println!("{}", escape_payload(tcp_packet.payload()))
             }
         }
-        None => println!("[{}] T Malformed packet", interface_name),
+        None => println!("[{}] TCP Malformed packet", interface_name),
     }
 }
 
@@ -554,7 +617,7 @@ fn process_udp(
                 println!("{}", escape_payload(udp_packet.payload()))
             }
         }
-        None => println!("[{}] U Malformed packet", interface_name),
+        None => println!("[{}] UDP Malformed packet", interface_name),
     }
 }
 
@@ -750,7 +813,7 @@ fn process_icmpv6(
                 }
             }
         }
-        None => println!("[{}] I Malformed packet", interface_name),
+        None => println!("[{}] ICMP Malformed packet", interface_name),
     }
 }
 
@@ -874,7 +937,7 @@ fn process_icmp(
                 }
             }
         }
-        None => println!("[{}] I Malformed packet", interface_name),
+        None => println!("[{}] ICMP Malformed packet", interface_name),
     }
 }
 
