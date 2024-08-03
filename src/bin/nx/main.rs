@@ -238,6 +238,8 @@ fn process_arp(settings: &Settings, interface_name: &str, packet: &EthernetPacke
     if !settings.arp {
         return;
     }
+    let iname = format!("[{}]", interface_name.purple());
+    let ptype = "ARP".bold().red();
     match ArpPacket::new(packet.payload()) {
         Some(arp_packet) => {
             if !filters_match_criteria(
@@ -251,27 +253,23 @@ fn process_arp(settings: &Settings, interface_name: &str, packet: &EthernetPacke
             ) {
                 return;
             }
-            println!(
-                "[{}] {} {}{} > {}{} ~ {}",
-                interface_name.purple(),
-                "ARP".bold().red(),
-                packet.get_source().to_string().green(),
-                format!("[{}]", arp_packet.get_sender_proto_addr())
-                    .dimmed()
-                    .green(),
-                packet.get_destination().to_string().blue(),
-                format!("[{}]", arp_packet.get_target_proto_addr())
-                    .dimmed()
-                    .blue(),
-                match arp_packet.get_operation() {
-                    ArpOperations::Reply => "reply",
-                    ArpOperations::Request => "request",
-                    _ => "unknown",
-                }
-                .yellow(),
-            )
+            let src_mac = packet.get_source().to_string().green();
+            let src_ip = format!("[{}]", arp_packet.get_sender_proto_addr())
+                .dimmed()
+                .green();
+            let dst_mac = packet.get_destination().to_string().blue();
+            let dst_ip = format!("[{}]", arp_packet.get_target_proto_addr())
+                .dimmed()
+                .blue();
+            let op = match arp_packet.get_operation() {
+                ArpOperations::Reply => "reply",
+                ArpOperations::Request => "request",
+                _ => "unknown",
+            }
+            .yellow();
+            println!("{iname} {ptype} {src_mac}{src_ip} > {dst_mac}{dst_ip} ~ {op}")
         }
-        None => println!("[{}] ARP Malformed packet", interface_name),
+        None => println!("{iname} {ptype} {}", "Malformed packet".red()),
     }
 }
 
@@ -494,6 +492,8 @@ fn process_ipip(
     if !settings.ipip {
         return;
     }
+    let iname = format!("[{}]", interface_name.purple());
+    let ptype = "IPIP".bold().red();
     match Ipv4Packet::new(packet) {
         Some(ip_packet) => {
             if !filters_match_criteria(
@@ -518,18 +518,14 @@ fn process_ipip(
             ) {
                 return;
             }
-            println!(
-                "[{}] {} {}{} > {}{} ~ {}",
-                interface_name.purple(),
-                "IPIP".red().bold(),
-                source.to_string().green(),
-                format!("[{}]", ip_packet.get_source()).dimmed().green(),
-                destination.to_string().blue(),
-                format!("[{}]", ip_packet.get_destination()).dimmed().blue(),
-                format!("{}b", ip_packet.payload().len()).cyan(),
-            );
+            let src_ip = source.to_string().green();
+            let src_ipip = format!("[{}]", ip_packet.get_source()).dimmed().green();
+            let dst_ip = destination.to_string().blue();
+            let dst_ipip = format!("[{}]", ip_packet.get_destination()).dimmed().blue();
+            let bytes = format!("{}b", ip_packet.payload().len()).cyan();
+            println!("{iname} {ptype} {src_ip}{src_ipip} > {dst_ip}{dst_ipip} ~ {bytes}",);
         }
-        None => println!("[{}] IPIP Malformed packet", interface_name),
+        None => println!("{iname} {ptype} {}", "Malformed packet".red()),
     }
 }
 
@@ -545,6 +541,8 @@ fn process_tcp(
     if !settings.tcp {
         return;
     }
+    let iname = format!("[{}]", interface_name.purple());
+    let ptype = "TCP".bold().red();
     match TcpPacket::new(packet) {
         Some(tcp_packet) => {
             if !filters_match_criteria(
@@ -558,23 +556,21 @@ fn process_tcp(
             ) {
                 return;
             }
+            let src_ip = source.to_string().green();
+            let src_port = format!(":{}", tcp_packet.get_source()).dimmed().green();
+            let dst_ip = destination.to_string().blue();
+            let dst_port = format!(":{}", tcp_packet.get_destination()).dimmed().blue();
+            let flags = tcp_type_from_flags(tcp_packet.get_flags()).yellow();
+            let seq = format!("#{}", tcp_packet.get_sequence()).dimmed().white();
+            let bytes = format!("{}b", tcp_packet.payload().len()).cyan();
             println!(
-                "[{}] {} {}{} > {}{} ~ {} {} {}",
-                interface_name.purple(),
-                "TCP".red().bold(),
-                source.to_string().green(),
-                format!(":{}", tcp_packet.get_source()).dimmed().green(),
-                destination.to_string().blue(),
-                format!(":{}", tcp_packet.get_destination()).dimmed().blue(),
-                tcp_type_from_flags(tcp_packet.get_flags()).yellow(),
-                format!("#{}", tcp_packet.get_sequence()).dimmed().white(),
-                format!("{}b", tcp_packet.payload().len()).cyan(),
+                "{iname} {ptype} {src_ip}{src_port} > {dst_ip}{dst_port} ~ {flags} {seq} {bytes}"
             );
             if !settings.short && !tcp_packet.payload().is_empty() {
                 println!("{}", escape_payload(tcp_packet.payload()))
             }
         }
-        None => println!("[{}] TCP Malformed packet", interface_name),
+        None => println!("{iname} {ptype} {}", "Malformed packet"),
     }
 }
 
@@ -590,6 +586,8 @@ fn process_udp(
     if !settings.udp {
         return;
     }
+    let iname = format!("[{}]", interface_name.purple());
+    let ptype = "UDP".bold().red();
     match UdpPacket::new(packet) {
         Some(udp_packet) => {
             if !filters_match_criteria(
@@ -603,21 +601,17 @@ fn process_udp(
             ) {
                 return;
             }
-            println!(
-                "[{}] {} {}{} > {}{} ~ {}",
-                interface_name.purple(),
-                "UDP".red().bold(),
-                source.to_string().green(),
-                format!(":{}", udp_packet.get_source()).dimmed().green(),
-                destination.to_string().blue(),
-                format!(":{}", udp_packet.get_destination()).dimmed().blue(),
-                format!("{}b", udp_packet.get_length()).cyan(),
-            );
+            let src_ip = source.to_string().green();
+            let src_port = format!(":{}", udp_packet.get_source()).dimmed().green();
+            let dst_ip = destination.to_string().blue();
+            let dst_port = format!(":{}", udp_packet.get_destination()).dimmed().blue();
+            let bytes = format!("{}b", udp_packet.payload().len()).cyan();
+            println!("{iname} {ptype} {src_ip}{src_port} > {dst_ip}{dst_port} ~ {bytes}");
             if !settings.short && !udp_packet.payload().is_empty() {
                 println!("{}", escape_payload(udp_packet.payload()))
             }
         }
-        None => println!("[{}] UDP Malformed packet", interface_name),
+        None => println!("{iname} {ptype} {}", "Malformed packet"),
     }
 }
 
@@ -644,6 +638,8 @@ fn process_icmpv6(
     ) {
         return;
     }
+    let iname = format!("[{}]", interface_name.purple());
+    let ptype = "ICMP".bold().red();
     match Icmpv6Packet::new(packet) {
         Some(icmp_packet) => {
             let (i_type, i_desc, i_details) = match icmp_packet.get_icmpv6_type() {
@@ -797,23 +793,19 @@ fn process_icmpv6(
                     None,
                 ),
             };
-            println!(
-                "[{}] {} {} > {} ~ {} {} {}",
-                interface_name.purple(),
-                "ICMP".bold().red(),
-                source.to_string().green(),
-                destination.to_string().blue(),
-                i_type.yellow(),
-                i_desc.dimmed().white(),
-                format!("{}b", icmp_packet.payload().len()).cyan(),
-            );
+            let src = source.to_string().green();
+            let dst = destination.to_string().blue();
+            let itype = i_type.yellow();
+            let idesc = i_desc.dimmed().white();
+            let bytes = format!("{}b", icmp_packet.payload().len()).cyan();
+            println!("{iname} {ptype} {src} > {dst} ~ {itype} {idesc} {bytes}",);
             if !settings.short {
                 if let Some(d) = i_details {
                     println!("{}", d)
                 }
             }
         }
-        None => println!("[{}] ICMP Malformed packet", interface_name),
+        None => println!("{iname} {ptype} {}", "Malformed packet"),
     }
 }
 
@@ -829,6 +821,8 @@ fn process_icmp(
     if !settings.icmp {
         return;
     }
+    let iname = format!("[{}]", interface_name.purple());
+    let ptype = "ICMP".bold().red();
     if !filters_match_criteria(
         &settings.filters,
         source_mac,
@@ -921,23 +915,19 @@ fn process_icmp(
                     None,
                 ),
             };
-            println!(
-                "[{}] {} {} > {} ~ {} {} {}",
-                interface_name.purple(),
-                "I".bold().red(),
-                source.to_string().green(),
-                destination.to_string().blue(),
-                i_type.yellow(),
-                i_desc.dimmed().white(),
-                format!("{}b", icmp_packet.payload().len()).cyan(),
-            );
+            let src = source.to_string().green();
+            let dst = destination.to_string().blue();
+            let itype = i_type.yellow();
+            let idesc = i_desc.dimmed().white();
+            let bytes = format!("{}b", icmp_packet.payload().len()).cyan();
+            println!("{iname} {ptype} {src} > {dst} ~ {itype} {idesc} {bytes}",);
             if !settings.short {
                 if let Some(d) = i_details {
                     println!("{}", d)
                 }
             }
         }
-        None => println!("[{}] ICMP Malformed packet", interface_name),
+        None => println!("{iname} {ptype} {}", "Malformed packet"),
     }
 }
 

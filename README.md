@@ -119,6 +119,6 @@ This is equivalent to the following:
 - [x] colorized output
 - [ ] man(1) page
 - [x] ethernet-frame-only filtering
-- [ ] GRE
+- [ ] GRE (IP 47 or UDP)
 - [ ] MPLS (EtherType)
-- [ ] Geneve
+- [x] Geneve (UDP port 6081, basically)
