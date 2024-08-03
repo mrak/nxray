@@ -222,7 +222,7 @@ fn process_ipv4(settings: &Settings, interface_name: &str, packet: &EthernetPack
                 ipv4_packet.payload(),
             );
         }
-        None => println!("[{}] Ipv4 Malformed packet", interface_name),
+        None => eprintln!("[{}] Ipv4 Malformed packet", interface_name),
     }
 }
 
@@ -240,7 +240,7 @@ fn process_ipv6(settings: &Settings, interface_name: &str, packet: &EthernetPack
                 ipv6_packet.payload(),
             );
         }
-        None => println!("[{}] IPv6 Malformed packet", interface_name),
+        None => eprintln!("[{}] IPv6 Malformed packet", interface_name),
     }
 }
 
@@ -279,7 +279,7 @@ fn process_arp(settings: &Settings, interface_name: &str, packet: &EthernetPacke
             .yellow();
             println!("{iname} {ptype} {src_mac}{src_ip} {dst_mac}{dst_ip} {op}")
         }
-        None => println!("{iname} {ptype} {}", "Malformed packet".red()),
+        None => eprintln!("{iname} {ptype} {}", "Malformed packet".red()),
     }
 }
 
@@ -535,7 +535,7 @@ fn process_ipip(
             let bytes = format!("{}b", ip_packet.payload().len()).cyan();
             println!("{iname} {ptype} {src_ip}{src_ipip} {dst_ip}{dst_ipip} {bytes}",);
         }
-        None => println!("{iname} {ptype} {}", "Malformed packet".red()),
+        None => eprintln!("{iname} {ptype} {}", "Malformed packet".red()),
     }
 }
 
@@ -578,7 +578,7 @@ fn process_tcp(
                 println!("{}", escape_payload(tcp_packet.payload()))
             }
         }
-        None => println!("{iname} {ptype} {}", "Malformed packet"),
+        None => eprintln!("{iname} {ptype} {}", "Malformed packet"),
     }
 }
 
@@ -619,7 +619,7 @@ fn process_udp(
                 println!("{}", escape_payload(udp_packet.payload()))
             }
         }
-        None => println!("{iname} {ptype} {}", "Malformed packet"),
+        None => eprintln!("{iname} {ptype} {}", "Malformed packet"),
     }
 }
 
@@ -813,7 +813,7 @@ fn process_icmpv6(
                 }
             }
         }
-        None => println!("{iname} {ptype} {}", "Malformed packet"),
+        None => eprintln!("{iname} {ptype} {}", "Malformed packet"),
     }
 }
 
@@ -935,7 +935,7 @@ fn process_icmp(
                 }
             }
         }
-        None => println!("{iname} {ptype} {}", "Malformed packet"),
+        None => eprintln!("{iname} {ptype} {}", "Malformed packet"),
     }
 }
 
