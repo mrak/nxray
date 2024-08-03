@@ -121,4 +121,6 @@ This is equivalent to the following:
 - [x] ethernet-frame-only filtering
 - [ ] GRE (IP 47 or UDP)
 - [ ] MPLS (EtherType)
+- [ ] VLAN (EtherType)
+- [ ] VXLAN (EtherType)
 - [x] Geneve (UDP port 6081, basically)
