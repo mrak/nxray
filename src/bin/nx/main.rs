@@ -59,11 +59,15 @@ fn usage() {
     println!();
     println!("OPTIONS");
     println!();
-    println!("tcp                    show only TCP packets");
-    println!("udp                    show only UDP packets");
-    println!("icmp                   show only ICMP packets");
-    println!("arp                    show only ARP packets");
-    println!("pcap                   output in pcap format");
+    println!("pcap                   TODO: output in pcap format.");
+    println!("                       Redirecting STDOUT to a file is assumed");
+    println!();
+    println!("protocol OPTIONS: if none are specificied, all are shown");
+    println!("tcp                    show TCP packets");
+    println!("udp                    show UDP packets");
+    println!("icmp                   show ICMP packets");
+    println!("arp                    show ARP packets");
+    println!("ipip                   show Ip-in-Ip packets");
     println!();
     println!("FILTER_EXPRESSIONS");
     println!();
@@ -79,6 +83,12 @@ fn usage() {
     println!("Dst match              @...");
     println!("Src AND Dst            @...^...");
     println!("Src <=> Dst            ...=...");
+    println!();
+    println!("INTERFACE_NAME");
+    println!("");
+    println!("Any argument not matching the above is assumed to be an interface name.");
+    println!("Arguments after -- are ONLY interpreted as interface names. This allows");
+    println!("the use of interface names that conflict with an argument.");
 }
 
 fn main() {
