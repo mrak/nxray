@@ -115,12 +115,23 @@ This is equivalent to the following:
 
 # Development TODO
 
-- [ ] pcap format
+- [x] tcp
+- [x] udp
+- [x] icmp
+- [x] icmpv6
+- [x] arp
+- [x] ip-in-ip
+- [x] MAC filters
+- [x] IP filters
+- [x] port filters
+- [x] TCP/UDP filters
+- [x] CIDR filters
+- [x] ICMP specialized output
 - [x] colorized output
+- [x] ~~Geneve (UDP port 6081, basically)~~ (Wont do)
 - [ ] man(1) page
-- [x] ethernet-frame-only filtering
-- [ ] GRE (IP 47 or UDP)
 - [ ] MPLS (EtherType)
 - [ ] VLAN (EtherType)
 - [ ] VXLAN (EtherType)
-- [x] Geneve (UDP port 6081, basically)
+- [ ] GRE (IP 47 or UDP)
+- [ ] pcap format
