@@ -156,30 +156,32 @@ fn capture_packets(settings: &Settings, sender: Sender<(u32, Vec<u8>)>) {
 
     for interface in interfaces {
         let child_snd = sender.clone();
-        thread::spawn(move || {
-            let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
-                Ok(Ethernet(tx, rx)) => (tx, rx),
-                Ok(_) => panic!("nx: unhandled channel type"),
-                Err(e) => match e.kind() {
-                    ErrorKind::PermissionDenied => {
-                        eprintln!(
-                            "nx: Permission Denied - Unable to open interface {}",
-                            interface.name
-                        );
-                        process::exit(1)
-                    }
-                    _ => panic!("nx: unable to create channel: {}", e),
-                },
-            };
-            loop {
-                match rx.next() {
-                    Ok(packet) => child_snd
-                        .send((interface.index, packet.to_owned()))
-                        .unwrap(),
-                    Err(e) => panic!("nx: Unable to receive packet: {}", e),
+        let _ = thread::Builder::new()
+            .name(interface.name.clone())
+            .spawn(move || {
+                let mut rx = match datalink::channel(&interface, Default::default()) {
+                    Ok(Ethernet(_, rx)) => rx,
+                    Ok(_) => panic!("nx: unhandled channel type"),
+                    Err(e) => match e.kind() {
+                        ErrorKind::PermissionDenied => {
+                            eprintln!(
+                                "nx: Permission Denied - Unable to open interface {}",
+                                interface.name
+                            );
+                            process::exit(1)
+                        }
+                        _ => panic!("nx: unable to create channel: {}", e),
+                    },
                 };
-            }
-        });
+                loop {
+                    match rx.next() {
+                        Ok(packet) => child_snd
+                            .send((interface.index, packet.to_owned()))
+                            .unwrap(),
+                        Err(e) => panic!("nx: Unable to receive packet: {}", e),
+                    };
+                }
+            });
     }
 }
 
