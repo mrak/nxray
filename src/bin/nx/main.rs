@@ -621,7 +621,7 @@ fn process_udp(
                 println!("{}", escape_payload(udp_packet.payload()))
             }
         }
-        None => eprintln!("{iname} {ptype} {}", "Malformed packet"),
+        None => eprintln!("{iname} {ptype} Malformed packet"),
     }
 }
 
@@ -815,7 +815,7 @@ fn process_icmpv6(
                 }
             }
         }
-        None => eprintln!("{iname} {ptype} {}", "Malformed packet"),
+        None => eprintln!("{iname} {ptype} Malformed packet"),
     }
 }
 
@@ -937,7 +937,7 @@ fn process_icmp(
                 }
             }
         }
-        None => eprintln!("{iname} {ptype} {}", "Malformed packet"),
+        None => eprintln!("{iname} {ptype} Malformed packet"),
     }
 }
 
@@ -946,7 +946,7 @@ mod tests {
     use super::*;
 
     fn args_to_filters(args: &[&str]) -> Vec<Filter> {
-        args.into_iter()
+        args.iter()
             .map(|a| {
                 let Argument::FilterExpr(f) = parse_arg(a).unwrap() else {
                     panic!()
