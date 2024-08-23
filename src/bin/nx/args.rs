@@ -65,13 +65,13 @@ pub enum Filter {
 }
 
 #[derive(PartialEq, Debug)]
-pub enum Argument<'a> {
+pub enum Argument {
     Version,
     Emdash,
     Short,
     Help,
     Pcap,
-    Interface(&'a str),
+    Interface(String),
     ProtocolFlag(Protocol),
     FilterExpr(Filter),
 }
@@ -212,7 +212,7 @@ pub fn parse_arg(argstr: &str) -> Result<Argument, Box<Error<Rule>>> {
             ))
         }
         Rule::emdash => Argument::Emdash,
-        Rule::interface => Argument::Interface(arg.as_str()),
+        Rule::interface => Argument::Interface(arg.as_str().to_owned()),
         _ => unreachable!(),
     });
 }
@@ -537,8 +537,11 @@ mod tests {
     #[test]
     fn interface() {
         let result = parse_arg("eth0");
-        assert_eq!(result.unwrap(), Argument::Interface("eth0"));
+        assert_eq!(result.unwrap(), Argument::Interface(String::from("eth0")));
         let result = parse_arg("docker0");
-        assert_eq!(result.unwrap(), Argument::Interface("docker0"));
+        assert_eq!(
+            result.unwrap(),
+            Argument::Interface(String::from("docker0"))
+        );
     }
 }

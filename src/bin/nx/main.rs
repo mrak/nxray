@@ -115,7 +115,7 @@ fn main() {
             Ok(Argument::ProtocolFlag(Protocol::Icmp)) => s.icmp = true,
             Ok(Argument::ProtocolFlag(Protocol::Arp)) => s.arp = true,
             Ok(Argument::ProtocolFlag(Protocol::IpIp)) => s.ipip = true,
-            Ok(Argument::Interface(i)) => s.interfaces.push(i.to_string()),
+            Ok(Argument::Interface(i)) => s.interfaces.push(i),
             Ok(Argument::FilterExpr(f)) => s.filters.push(f),
             Err(e) => {
                 eprintln!("{}", e);
@@ -580,7 +580,7 @@ fn process_tcp(
                 println!("{}", escape_payload(tcp_packet.payload()))
             }
         }
-        None => eprintln!("{iname} {ptype} {}", "Malformed packet"),
+        None => eprintln!("{iname} {ptype} Malformed packet"),
     }
 }
 
