@@ -1,6 +1,5 @@
-mod args;
+use nxray::*;
 
-use crate::args::*;
 use colored::Colorize;
 use pnet::datalink;
 use pnet::datalink::Channel::Ethernet;

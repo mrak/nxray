@@ -10,7 +10,7 @@ use pnet::ipnetwork::Ipv6Network;
 use std::str::FromStr;
 
 #[derive(Parser)]
-#[grammar = "bin/nx/args.pest"]
+#[grammar = "nx.pest"]
 pub struct ARGParser;
 
 #[derive(PartialEq, Debug)]
