@@ -1,6 +1,6 @@
 mod args;
 
-use args::*;
+use crate::args::*;
 use colored::Colorize;
 use pnet::datalink;
 use pnet::datalink::Channel::Ethernet;
