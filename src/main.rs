@@ -1,6 +1,10 @@
-use nxray::*;
-
 use colored::Colorize;
+use nxray::Address;
+use nxray::Argument;
+use nxray::Filter;
+use nxray::PacketDirection;
+use nxray::PortOption;
+use nxray::Protocol;
 use pnet::datalink;
 use pnet::datalink::Channel::Ethernet;
 use pnet::datalink::MacAddr;
@@ -11,7 +15,11 @@ use pnet::packet::ethernet::EtherTypes;
 use pnet::packet::ethernet::EthernetPacket;
 use pnet::packet::icmp::IcmpPacket;
 use pnet::packet::icmp::IcmpTypes;
-use pnet::packet::icmpv6::ndp::*;
+use pnet::packet::icmpv6::ndp::NdpOptionTypes;
+use pnet::packet::icmpv6::ndp::NeighborAdvertPacket;
+use pnet::packet::icmpv6::ndp::NeighborSolicitPacket;
+use pnet::packet::icmpv6::ndp::RedirectPacket;
+use pnet::packet::icmpv6::ndp::RouterAdvertPacket;
 use pnet::packet::icmpv6::Icmpv6Packet;
 use pnet::packet::icmpv6::Icmpv6Types;
 use pnet::packet::ip::IpNextHeaderProtocol;
@@ -97,7 +105,7 @@ fn main() {
     let mut args = env::args().skip(1);
 
     for argument in args.by_ref() {
-        match parse_arg(argument.as_str()) {
+        match nxray::parse_arg(argument.as_str()) {
             Ok(Argument::Emdash) => break,
             Ok(Argument::Pcap) => s.pcap = true,
             Ok(Argument::Short) => s.short = true,
