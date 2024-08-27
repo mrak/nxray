@@ -9,6 +9,50 @@ use pnet::ipnetwork::Ipv4Network;
 use pnet::ipnetwork::Ipv6Network;
 use std::str::FromStr;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub fn version() {
+    println!("nx version {}", VERSION);
+}
+
+pub fn usage() {
+    version();
+    println!("Usage: nx [OPTION..] [FILTER_EXPRESSION..] [--] [INTERFACE_NAME..]");
+    println!();
+    println!("OPTIONS");
+    println!();
+    println!("pcap                   TODO: output in pcap format.");
+    println!("                       Redirecting STDOUT to a file is assumed");
+    println!();
+    println!("protocol OPTIONS: if none are specificied, all are shown");
+    println!("tcp                    show TCP packets");
+    println!("udp                    show UDP packets");
+    println!("icmp                   show ICMP packets");
+    println!("arp                    show ARP packets");
+    println!("ipip                   show Ip-in-Ip packets");
+    println!();
+    println!("FILTER_EXPRESSIONS");
+    println!();
+    println!("MAC Address match      MAC_ADDRESS");
+    println!("Port match             :PORT");
+    println!("Address match          IP_ADDRESS");
+    println!("CIDR                   IP_ADDRESS/MASK");
+    println!("CIDR with port         IP_ADDRESS/MASK:PORT");
+    println!();
+    println!("any of the above replaces ... below");
+    println!();
+    println!("Src match              ^...");
+    println!("Dst match              @...");
+    println!("Src AND Dst            @...^...");
+    println!("Src <=> Dst            ...=...");
+    println!();
+    println!("INTERFACE_NAME");
+    println!();
+    println!("Any argument not matching the above is assumed to be an interface name.");
+    println!("Arguments after -- are ONLY interpreted as interface names. This allows");
+    println!("the use of interface names that conflict with an argument.");
+}
+
 #[derive(Parser)]
 #[grammar = "args.pest"]
 pub struct ARGParser;

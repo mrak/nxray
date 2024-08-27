@@ -41,8 +41,6 @@ use std::sync::mpsc::Sender;
 use std::thread;
 use std::vec::Vec;
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 #[derive(Default, Debug)]
 struct Settings {
     pcap: bool,
@@ -54,48 +52,6 @@ struct Settings {
     ipip: bool,
     interfaces: Vec<String>,
     filters: Vec<Filter>,
-}
-
-fn version() {
-    println!("nx version {}", VERSION);
-}
-
-fn usage() {
-    version();
-    println!("Usage: nx [OPTION..] [FILTER_EXPRESSION..] [--] [INTERFACE_NAME..]");
-    println!();
-    println!("OPTIONS");
-    println!();
-    println!("pcap                   TODO: output in pcap format.");
-    println!("                       Redirecting STDOUT to a file is assumed");
-    println!();
-    println!("protocol OPTIONS: if none are specificied, all are shown");
-    println!("tcp                    show TCP packets");
-    println!("udp                    show UDP packets");
-    println!("icmp                   show ICMP packets");
-    println!("arp                    show ARP packets");
-    println!("ipip                   show Ip-in-Ip packets");
-    println!();
-    println!("FILTER_EXPRESSIONS");
-    println!();
-    println!("MAC Address match      MAC_ADDRESS");
-    println!("Port match             :PORT");
-    println!("Address match          IP_ADDRESS");
-    println!("CIDR                   IP_ADDRESS/MASK");
-    println!("CIDR with port         IP_ADDRESS/MASK:PORT");
-    println!();
-    println!("any of the above replaces ... below");
-    println!();
-    println!("Src match              ^...");
-    println!("Dst match              @...");
-    println!("Src AND Dst            @...^...");
-    println!("Src <=> Dst            ...=...");
-    println!();
-    println!("INTERFACE_NAME");
-    println!();
-    println!("Any argument not matching the above is assumed to be an interface name.");
-    println!("Arguments after -- are ONLY interpreted as interface names. This allows");
-    println!("the use of interface names that conflict with an argument.");
 }
 
 fn main() {
@@ -110,11 +66,11 @@ fn main() {
             Ok(Argument::Pcap) => s.pcap = true,
             Ok(Argument::Short) => s.short = true,
             Ok(Argument::Version) => {
-                version();
+                nxray::args::version();
                 process::exit(0)
             }
             Ok(Argument::Help) => {
-                usage();
+                nxray::args::usage();
                 process::exit(0)
             }
             Ok(Argument::ProtocolFlag(Protocol::Tcp)) => s.tcp = true,
