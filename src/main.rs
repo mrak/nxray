@@ -1,10 +1,10 @@
 use colored::Colorize;
-use nxray::Address;
-use nxray::Argument;
-use nxray::Filter;
-use nxray::PacketDirection;
-use nxray::PortOption;
-use nxray::Protocol;
+use nxray::args::Address;
+use nxray::args::Argument;
+use nxray::args::Filter;
+use nxray::args::PacketDirection;
+use nxray::args::PortOption;
+use nxray::args::Protocol;
 use pnet::datalink;
 use pnet::datalink::Channel::Ethernet;
 use pnet::datalink::MacAddr;
@@ -105,7 +105,7 @@ fn main() {
     let mut args = env::args().skip(1);
 
     for argument in args.by_ref() {
-        match nxray::parse_arg(argument.as_str()) {
+        match nxray::args::parse_arg(argument.as_str()) {
             Ok(Argument::Emdash) => break,
             Ok(Argument::Pcap) => s.pcap = true,
             Ok(Argument::Short) => s.short = true,
@@ -955,7 +955,7 @@ mod tests {
     fn args_to_filters(args: &[&str]) -> Vec<Filter> {
         args.iter()
             .map(|a| {
-                let Argument::FilterExpr(f) = parse_arg(a).unwrap() else {
+                let Argument::FilterExpr(f) = nxray::args::parse_arg(a).unwrap() else {
                     panic!()
                 };
                 f
