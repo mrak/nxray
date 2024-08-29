@@ -140,7 +140,7 @@ fn capture_packets(settings: &Settings, sender: Sender<(u32, Vec<u8>)>) {
                     match rx.next() {
                         Ok(packet) => child_snd
                             .send((interface.index, packet.to_owned()))
-                            .unwrap(),
+                            .expect("packet should be able to be sent on channel"),
                         Err(e) => panic!("nx: Unable to receive packet: {}", e),
                     };
                 }
@@ -156,16 +156,19 @@ fn print_packets(settings: &Settings, receiver: Receiver<(u32, Vec<u8>)>) {
     loop {
         match receiver.recv() {
             Ok((index, packet)) => {
-                let ethernet_packet = EthernetPacket::new(packet.as_slice()).unwrap();
-                match ethernet_packet.get_ethertype() {
-                    EtherTypes::Ipv4 => {
-                        process_ipv4(settings, &inames[&index][..], &ethernet_packet)
+                if let Some(ethernet_packet) = EthernetPacket::new(packet.as_slice()) {
+                    match ethernet_packet.get_ethertype() {
+                        EtherTypes::Ipv4 => {
+                            process_ipv4(settings, &inames[&index][..], &ethernet_packet)
+                        }
+                        EtherTypes::Ipv6 => {
+                            process_ipv6(settings, &inames[&index][..], &ethernet_packet)
+                        }
+                        EtherTypes::Arp => {
+                            process_arp(settings, &inames[&index][..], &ethernet_packet)
+                        }
+                        _ => {}
                     }
-                    EtherTypes::Ipv6 => {
-                        process_ipv6(settings, &inames[&index][..], &ethernet_packet)
-                    }
-                    EtherTypes::Arp => process_arp(settings, &inames[&index][..], &ethernet_packet),
-                    _ => {}
                 }
             }
             Err(_) => panic!("All interfaces closed"),
