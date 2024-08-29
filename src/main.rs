@@ -81,7 +81,7 @@ fn main() {
             Ok(Argument::Interface(i)) => s.interfaces.push(i),
             Ok(Argument::FilterExpr(f)) => s.filters.push(f),
             Err(e) => {
-                eprintln!("{}", e);
+                eprintln!("{:?}", e);
                 process::exit(1)
             }
         }

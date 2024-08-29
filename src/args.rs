@@ -1,5 +1,5 @@
-use pest::error::Error;
-use pest::error::ErrorVariant;
+use anyhow::Context;
+use anyhow::Result;
 use pest::iterators::Pair;
 use pest::Parser;
 use pest_derive::Parser;
@@ -120,31 +120,26 @@ pub enum Argument {
     FilterExpr(Filter),
 }
 
-fn parse_port(arg: Pair<Rule>) -> Result<u16, Box<Error<Rule>>> {
-    Ok(arg.as_str().parse::<u16>().map_err(|e| {
-        Error::new_from_span(
-            ErrorVariant::<Rule>::CustomError {
-                message: e.to_string(),
-            },
-            arg.as_span(),
-        )
-    })?)
+fn parse_port(arg: Pair<Rule>) -> Result<u16> {
+    arg.as_str()
+        .parse::<u16>()
+        .context(format!("port {}", arg.as_str()))
 }
 
-fn parse_port_opt(arg: Pair<Rule>) -> Result<PortOption, Box<Error<Rule>>> {
+fn parse_port_opt(arg: Pair<Rule>) -> Result<PortOption> {
     let opt = arg.into_inner().next().unwrap();
     Ok(match opt.as_rule() {
-        Rule::port => PortOption::Specific(opt.as_str().parse::<u16>().unwrap()),
+        Rule::port => PortOption::Specific(parse_port(opt)?),
         Rule::port_list => PortOption::List(
             opt.into_inner()
                 .map(parse_port)
-                .collect::<Result<Vec<u16>, Box<Error<Rule>>>>()?,
+                .collect::<Result<Vec<u16>>>()?,
         ),
         Rule::port_range_lower => {
-            PortOption::Range(0, opt.into_inner().as_str().parse::<u16>().unwrap())
+            PortOption::Range(0, parse_port(opt.into_inner().next().unwrap())?)
         }
         Rule::port_range_upper => {
-            PortOption::Range(opt.into_inner().as_str().parse::<u16>().unwrap(), u16::MAX)
+            PortOption::Range(parse_port(opt.into_inner().next().unwrap())?, u16::MAX)
         }
         Rule::port_range_bounded => {
             let mut inner = opt.into_inner();
@@ -156,54 +151,40 @@ fn parse_port_opt(arg: Pair<Rule>) -> Result<PortOption, Box<Error<Rule>>> {
     })
 }
 
-fn parse_ip4_address(arg: Pair<Rule>) -> Result<Address, Box<Error<Rule>>> {
+fn parse_ip4_address(arg: Pair<Rule>) -> Result<Address> {
     let mut inner = arg.clone().into_inner();
     let mut port_opt = PortOption::Any;
     let ip_str = inner.next().unwrap().as_str();
-    let ip = ip_str.parse::<Ipv4Network>().map_err(|e| {
-        Error::new_from_span(
-            ErrorVariant::<Rule>::CustomError {
-                message: e.to_string(),
-            },
-            arg.as_span(),
-        )
-    })?;
+    let ip = ip_str.parse::<Ipv4Network>()?;
     if let Some(n) = inner.next() {
         port_opt = parse_port_opt(n)?
     }
     Ok(Address::IP(IpNetwork::V4(ip), port_opt))
 }
 
-fn parse_ip6_address(arg: Pair<Rule>) -> Result<Address, Box<Error<Rule>>> {
+fn parse_ip6_address(arg: Pair<Rule>) -> Result<Address> {
     let mut inner = arg.clone().into_inner();
     let mut port_opt = PortOption::Any;
     let ip_str = inner.next().unwrap().as_str();
-    let ip = ip_str.parse::<Ipv6Network>().map_err(|e| {
-        Error::new_from_span(
-            ErrorVariant::<Rule>::CustomError {
-                message: e.to_string(),
-            },
-            arg.as_span(),
-        )
-    })?;
+    let ip = ip_str.parse::<Ipv6Network>()?;
     if let Some(n) = inner.next() {
         port_opt = parse_port_opt(n)?
     }
     Ok(Address::IP(IpNetwork::V6(ip), port_opt))
 }
 
-fn parse_address(arg: Pair<Rule>) -> Result<Address, Box<Error<Rule>>> {
+fn parse_address(arg: Pair<Rule>) -> Result<Address> {
     let a = arg.into_inner().next().unwrap();
     match a.as_rule() {
         Rule::port_opt => Ok(Address::PortOnly(parse_port_opt(a)?)),
         Rule::ipv4_address => parse_ip4_address(a),
         Rule::ipv6_address => parse_ip6_address(a),
-        Rule::mac_address => Ok(Address::Mac(a.as_str().parse::<MacAddr>().unwrap())),
+        Rule::mac_address => Ok(Address::Mac(a.as_str().parse::<MacAddr>()?)),
         _ => unreachable!(),
     }
 }
 
-fn parse_anchor_address(arg: Pair<Rule>) -> Result<(PacketDirection, Address), Box<Error<Rule>>> {
+fn parse_anchor_address(arg: Pair<Rule>) -> Result<(PacketDirection, Address)> {
     let mut inner = arg.into_inner();
     let direction = match inner.next().unwrap().into_inner().next().unwrap().as_rule() {
         Rule::source => PacketDirection::Source,
@@ -214,8 +195,9 @@ fn parse_anchor_address(arg: Pair<Rule>) -> Result<(PacketDirection, Address), B
     Ok((direction, address))
 }
 
-pub fn parse_arg(argstr: &str) -> Result<Argument, Box<Error<Rule>>> {
-    let arg = ARGParser::parse(Rule::argument, argstr)?
+pub fn parse_arg(argstr: &str) -> Result<Argument> {
+    let arg = ARGParser::parse(Rule::argument, argstr)
+        .context("invalid argument")?
         .next()
         .unwrap()
         .into_inner()
