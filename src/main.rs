@@ -1,3 +1,4 @@
+use anyhow::Context;
 use colored::Colorize;
 use nxray::args::Address;
 use nxray::args::Argument;
@@ -61,7 +62,9 @@ fn main() {
     let mut args = env::args().skip(1);
 
     for argument in args.by_ref() {
-        match nxray::args::parse_arg(argument.as_str()) {
+        match nxray::args::parse_arg(argument.as_str())
+            .context(format!("invalid argument '{}'", argument.as_str()))
+        {
             Ok(Argument::Emdash) => break,
             Ok(Argument::Pcap) => s.pcap = true,
             Ok(Argument::Short) => s.short = true,
@@ -81,7 +84,7 @@ fn main() {
             Ok(Argument::Interface(i)) => s.interfaces.push(i),
             Ok(Argument::FilterExpr(f)) => s.filters.push(f),
             Err(e) => {
-                eprintln!("{:?}", e);
+                eprintln!("nx: {:?}", e);
                 process::exit(1)
             }
         }
@@ -351,7 +354,7 @@ fn escape_payload(payload: &[u8]) -> String {
             })
             .collect(),
     )
-    .unwrap()
+    .expect("unable to escape packet payload")
 }
 
 fn port_opt_match(port_opt: &PortOption, port: u16) -> bool {
