@@ -156,25 +156,14 @@ fn print_packets(settings: &Settings, receiver: Receiver<(u32, Vec<u8>)>) {
         .iter()
         .map(|x| (x.index, x.name.clone()))
         .collect();
-    loop {
-        match receiver.recv() {
-            Ok((index, packet)) => {
-                if let Some(ethernet_packet) = EthernetPacket::new(packet.as_slice()) {
-                    match ethernet_packet.get_ethertype() {
-                        EtherTypes::Ipv4 => {
-                            process_ipv4(settings, &inames[&index][..], &ethernet_packet)
-                        }
-                        EtherTypes::Ipv6 => {
-                            process_ipv6(settings, &inames[&index][..], &ethernet_packet)
-                        }
-                        EtherTypes::Arp => {
-                            process_arp(settings, &inames[&index][..], &ethernet_packet)
-                        }
-                        _ => {}
-                    }
-                }
+    for (index, packet) in receiver {
+        if let Some(ethernet_packet) = EthernetPacket::new(packet.as_slice()) {
+            match ethernet_packet.get_ethertype() {
+                EtherTypes::Ipv4 => process_ipv4(settings, &inames[&index][..], &ethernet_packet),
+                EtherTypes::Ipv6 => process_ipv6(settings, &inames[&index][..], &ethernet_packet),
+                EtherTypes::Arp => process_arp(settings, &inames[&index][..], &ethernet_packet),
+                _ => {}
             }
-            Err(_) => panic!("All interfaces closed"),
         }
     }
 }
